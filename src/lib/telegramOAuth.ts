@@ -15,15 +15,13 @@ export function buildTelegramOAuthUrl(opts: {
   return `https://oauth.telegram.org/auth?${params.toString()}`;
 }
 
-export function openTelegramQrLogin(botId: string) {
-  if (typeof window === "undefined" || !botId) return null;
-  const url = buildTelegramOAuthUrl({
-    botId,
-    origin: window.location.origin,
-  });
-  return window.open(
-    url,
-    "TelegramLogin",
-    "toolbar=0,scrollbars=1,status=0,resizable=1,location=0,menuBar=0,width=560,height=620",
+/** Same-tab redirect — popup return often never hits our callback. */
+export function startTelegramQrLogin(botId: string) {
+  if (typeof window === "undefined" || !botId) return;
+  window.location.assign(
+    buildTelegramOAuthUrl({
+      botId,
+      origin: window.location.origin,
+    }),
   );
 }
