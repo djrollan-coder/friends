@@ -7,6 +7,7 @@ export type BotLoginClaims = {
   first_name: string;
   last_name?: string;
   username?: string;
+  photo_url?: string;
   exp: number;
 };
 
@@ -83,6 +84,7 @@ export function authUserFromBotClaims(claims: BotLoginClaims): AuthUser {
     name,
     username: claims.username,
     avatar: initials(name),
+    photoUrl: claims.photo_url,
     method: "telegram",
   };
 }

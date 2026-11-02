@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Composer } from "@/components/Composer";
 import { PostCard } from "@/components/PostCard";
-import { currentUser } from "@/data/mock";
+import { getSessionUser } from "@/lib/sessionUser";
 import { getPerson } from "@/lib/friendsStore";
 import {
   addComment,
@@ -40,7 +40,7 @@ export default function GroupPage() {
   const members = useMemo(
     () =>
       (group?.memberIds ?? [])
-        .map((id) => (id === currentUser.id ? currentUser : getPerson(id)))
+        .map((id) => (id === getSessionUser().id ? getSessionUser() : getPerson(id)))
         .filter(Boolean),
     [group],
   );
@@ -54,8 +54,8 @@ export default function GroupPage() {
     );
   }
 
-  const joined = group.memberIds.includes(currentUser.id);
-  const isOwner = group.ownerId === currentUser.id;
+  const joined = group.memberIds.includes(getSessionUser().id);
+  const isOwner = group.ownerId === getSessionUser().id;
 
   return (
     <div className="sortable-stack">

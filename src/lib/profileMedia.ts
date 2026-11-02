@@ -1,4 +1,4 @@
-import { currentUser } from "@/data/mock";
+import { getSessionUser } from "@/lib/sessionUser";
 
 export const PROFILE_MEDIA_KEY = "friends.profile.media";
 
@@ -7,15 +7,28 @@ export type ProfileMedia = {
   cover: string;
 };
 
-const defaults: ProfileMedia = {
-  photo: currentUser.photo ?? "/profile/avatar.jpg",
-  cover: currentUser.cover ?? "/profile/cover.jpg",
-};
+const fallbackCover = "/profile/cover.jpg";
 
-export function loadProfileMedia(): ProfileMedia {
+function keyFor(userId?: string) {
+  const id = userId ?? getSessionUser().id;
+  return `${PROFILE_MEDIA_KEY}.${id}`;
+}
+
+export function defaultProfileMedia(userId?: string): ProfileMedia {
+  const me = userId ? { id: userId, photo: undefined as string | undefined } : getSessionUser();
+  const authPhoto =
+    !userId || userId === getSessionUser().id ? getSessionUser().photo : undefined;
+  return {
+    photo: authPhoto || "/profile/avatar.jpg",
+    cover: fallbackCover,
+  };
+}
+
+export function loadProfileMedia(userId?: string): ProfileMedia {
+  const defaults = defaultProfileMedia(userId);
   if (typeof window === "undefined") return defaults;
   try {
-    const raw = localStorage.getItem(PROFILE_MEDIA_KEY);
+    const raw = localStorage.getItem(keyFor(userId));
     if (!raw) return defaults;
     const parsed = JSON.parse(raw) as Partial<ProfileMedia>;
     return {
@@ -27,12 +40,12 @@ export function loadProfileMedia(): ProfileMedia {
   }
 }
 
-export function saveProfileMedia(next: ProfileMedia) {
-  localStorage.setItem(PROFILE_MEDIA_KEY, JSON.stringify(next));
+export function saveProfileMedia(next: ProfileMedia, userId?: string) {
+  localStorage.setItem(keyFor(userId), JSON.stringify(next));
 }
 
-export function clearProfileMedia() {
-  localStorage.removeItem(PROFILE_MEDIA_KEY);
+export function clearProfileMedia(userId?: string) {
+  localStorage.removeItem(keyFor(userId));
 }
 
 /** Compress image file to a data URL so it fits in localStorage for the prototype. */
@@ -50,25 +63,25 @@ export function fileToDataUrl(
     reader.onerror = () => reject(new Error("Не удалось прочитать файл"));
     reader.onload = () => {
       const img = new Image();
-      img.onerror = () => reject(new Error("Некорректное изображение"));
+      img.onerror = () => reject(new Error("Не удалось открыть изображение"));
       img.onload = () => {
         const scale = Math.min(
           1,
           opts.maxWidth / img.width,
           opts.maxHeight / img.height,
         );
-        const width = Math.max(1, Math.round(img.width * scale));
-        const height = Math.max(1, Math.round(img.height * scale));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
         const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = w;
+        canvas.height = h;
         const ctx = canvas.getContext("2d");
         if (!ctx) {
-          reject(new Error("Canvas недоступен"));
+          reject(new Error("Canvas unsupported"));
           return;
         }
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", opts.quality ?? 0.84));
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", opts.quality ?? 0.82));
       };
       img.src = String(reader.result);
     };

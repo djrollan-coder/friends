@@ -1,4 +1,5 @@
-import { currentUser, friends, initialPosts, type Post, type User } from "@/data/mock";
+import { friends, initialPosts, type Post, type User } from "@/data/mock";
+import { getSessionUser } from "@/lib/sessionUser";
 import { pushNotification } from "./notify";
 
 export const FEED_KEY = "friends.feed.v1";
@@ -85,7 +86,7 @@ export function createPost(input: {
 }): FeedPost {
   const post: FeedPost = {
     id: `p_${Date.now()}`,
-    author: input.author ?? currentUser,
+    author: input.author ?? getSessionUser(),
     text: input.text.trim(),
     createdAt: nowLabel(),
     likes: 0,
@@ -115,7 +116,7 @@ export function toggleLike(postId: string) {
   });
   saveFeed(next);
   const post = next.find((p) => p.id === postId);
-  if (post?.likedByMe && post.author.id !== currentUser.id) {
+  if (post?.likedByMe && post.author.id !== getSessionUser().id) {
     pushNotification({
       type: "like",
       title: "Новая реакция",
@@ -131,7 +132,7 @@ export function addComment(postId: string, text: string) {
   if (!trimmed) return loadFeed();
   const comment: FeedComment = {
     id: `c_${Date.now()}`,
-    author: currentUser,
+    author: getSessionUser(),
     text: trimmed,
     createdAt: nowLabel(),
   };
@@ -146,11 +147,11 @@ export function addComment(postId: string, text: string) {
   });
   saveFeed(next);
   const post = next.find((p) => p.id === postId);
-  if (post && post.author.id !== currentUser.id) {
+  if (post && post.author.id !== getSessionUser().id) {
     pushNotification({
       type: "comment",
       title: "Новый комментарий",
-      body: `${currentUser.name}: ${trimmed.slice(0, 80)}`,
+      body: `${getSessionUser().name}: ${trimmed.slice(0, 80)}`,
       href: "/feed",
     });
   }
@@ -164,7 +165,7 @@ export function repost(postId: string) {
   const copy: FeedPost = {
     ...original,
     id: `p_${Date.now()}`,
-    author: currentUser,
+    author: getSessionUser(),
     text: `Репост: ${original.text}`,
     createdAt: nowLabel(),
     likes: 0,

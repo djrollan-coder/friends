@@ -5,30 +5,40 @@ import Link from "next/link";
 import { ProfileEditor } from "@/components/ProfileEditor";
 import { SortableBlocks } from "@/components/SortableBlocks";
 import { Wall } from "@/components/Wall";
-import { currentUser, friends } from "@/data/mock";
+import { useAuth } from "@/components/AuthProvider";
+import { friends } from "@/data/mock";
 import { useT } from "@/lib/i18n/I18nProvider";
-import { loadProfileMedia, type ProfileMedia } from "@/lib/profileMedia";
+import {
+  defaultProfileMedia,
+  loadProfileMedia,
+  type ProfileMedia,
+} from "@/lib/profileMedia";
 import { loadProfileBio, type ProfileBio } from "@/lib/profileStore";
 import { loadFriendsState } from "@/lib/friendsStore";
 import { loadGroups } from "@/lib/groupsStore";
+import { getSessionUser } from "@/lib/sessionUser";
 
 function ProfileBlock() {
   const t = useT();
-  const [media, setMedia] = useState<ProfileMedia>(() => ({
-    photo: currentUser.photo ?? "/profile/avatar.jpg",
-    cover: currentUser.cover ?? "/profile/cover.jpg",
-  }));
+  const { user } = useAuth();
+  const me = getSessionUser();
+  const displayName = user?.name ?? me.name;
+  const [media, setMedia] = useState<ProfileMedia>(() => defaultProfileMedia());
   const [bio, setBio] = useState<ProfileBio>(() => loadProfileBio());
   const [editing, setEditing] = useState(false);
   const [friendCount, setFriendCount] = useState(friends.length);
-  const [groupCount, setGroupCount] = useState(7);
+  const [groupCount, setGroupCount] = useState(0);
 
   useEffect(() => {
-    setMedia(loadProfileMedia());
-    setBio(loadProfileBio());
+    const session = getSessionUser();
+    setMedia(loadProfileMedia(session.id));
+    setBio(loadProfileBio(session.id));
     setFriendCount(loadFriendsState().friendIds.length);
-    setGroupCount(loadGroups().filter((g) => g.memberIds.includes(currentUser.id)).length);
-  }, []);
+    setGroupCount(loadGroups().filter((g) => g.memberIds.includes(session.id)).length);
+  }, [user?.id]);
+
+  const photo = user?.photoUrl || media.photo;
+  const hasPhoto = Boolean(photo && photo !== "/profile/avatar.jpg");
 
   return (
     <>
@@ -43,12 +53,18 @@ function ProfileBlock() {
         <div className="vk-main-pad vk-profile-body">
           <div className="vk-profile-layout">
             <aside>
-              <div
-                className="vk-avatar has-photo"
-                style={{ backgroundImage: `url(${media.photo})` }}
-                role="img"
-                aria-label={currentUser.name}
-              />
+              {hasPhoto ? (
+                <div
+                  className="vk-avatar has-photo"
+                  style={{ backgroundImage: `url(${photo})` }}
+                  role="img"
+                  aria-label={displayName}
+                />
+              ) : (
+                <div className="vk-avatar" role="img" aria-label={displayName}>
+                  {user?.avatar ?? me.avatar}
+                </div>
+              )}
               <div className="vk-side-actions">
                 <Link href="/messages">{t("profile.writeMessage")}</Link>
                 <button type="button" onClick={() => setEditing(true)}>
@@ -58,8 +74,12 @@ function ProfileBlock() {
             </aside>
 
             <div>
-              <h1 className="vk-page-title">{currentUser.name}</h1>
-              <div className="vk-status-box">{bio.status}</div>
+              <h1 className="vk-page-title">{displayName}</h1>
+              {user?.username ? (
+                <div className="vk-status-box">@{user.username}</div>
+              ) : bio.status ? (
+                <div className="vk-status-box">{bio.status}</div>
+              ) : null}
               {bio.about ? <p className="profile-about">{bio.about}</p> : null}
 
               <div className="vk-counts">
@@ -68,7 +88,7 @@ function ProfileBlock() {
                   {t("profile.friendsCount")}
                 </Link>
                 <Link href="/photos">
-                  <strong>24</strong>
+                  <strong>0</strong>
                   {t("profile.photosCount")}
                 </Link>
                 <Link href="/groups">
@@ -76,33 +96,41 @@ function ProfileBlock() {
                   {t("profile.groupsCount")}
                 </Link>
                 <Link href="/videos">
-                  <strong>3</strong>
+                  <strong>0</strong>
                   {t("profile.videosCount")}
                 </Link>
               </div>
 
-              <table className="vk-info-table">
-                <tbody>
-                  <tr>
-                    <td>{t("profile.birthday")}:</td>
-                    <td>
-                      <a href="#">{bio.birthday}</a>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>{t("profile.city")}:</td>
-                    <td>
-                      <a href="#">{bio.city}</a>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>{t("profile.relationship")}:</td>
-                    <td>
-                      <a href="#">{bio.relationship}</a>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              {(bio.birthday || bio.city || bio.relationship) && (
+                <table className="vk-info-table">
+                  <tbody>
+                    {bio.birthday ? (
+                      <tr>
+                        <td>{t("profile.birthday")}:</td>
+                        <td>
+                          <a href="#">{bio.birthday}</a>
+                        </td>
+                      </tr>
+                    ) : null}
+                    {bio.city ? (
+                      <tr>
+                        <td>{t("profile.city")}:</td>
+                        <td>
+                          <a href="#">{bio.city}</a>
+                        </td>
+                      </tr>
+                    ) : null}
+                    {bio.relationship ? (
+                      <tr>
+                        <td>{t("profile.relationship")}:</td>
+                        <td>
+                          <a href="#">{bio.relationship}</a>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>

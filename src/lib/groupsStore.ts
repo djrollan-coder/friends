@@ -1,4 +1,4 @@
-import { currentUser } from "@/data/mock";
+import { getSessionUser } from "@/lib/sessionUser";
 import { createPost, loadFeed } from "./feedStore";
 import { pushNotification } from "./notify";
 
@@ -21,8 +21,8 @@ function seed(): Community[] {
       name: "Friends Community",
       desc: "Новости продукта",
       privacy: "public",
-      ownerId: currentUser.id,
-      memberIds: [currentUser.id, "2", "3", "5"],
+      ownerId: getSessionUser().id,
+      memberIds: [getSessionUser().id, "2", "3", "5"],
       cover: "FC",
     },
     {
@@ -31,7 +31,7 @@ function seed(): Community[] {
       desc: "Обсуждаем кино",
       privacy: "public",
       ownerId: "2",
-      memberIds: [currentUser.id, "2", "4", "6"],
+      memberIds: [getSessionUser().id, "2", "4", "6"],
       cover: "ФУ",
     },
     {
@@ -40,7 +40,7 @@ function seed(): Community[] {
       desc: "Новости и мемы",
       privacy: "private",
       ownerId: "3",
-      memberIds: [currentUser.id, "3"],
+      memberIds: [getSessionUser().id, "3"],
       cover: "КВ",
     },
   ];
@@ -76,8 +76,8 @@ export function createGroup(input: {
     name: input.name.trim() || "Новое сообщество",
     desc: input.desc.trim() || "Без описания",
     privacy: input.privacy,
-    ownerId: currentUser.id,
-    memberIds: [currentUser.id],
+    ownerId: getSessionUser().id,
+    memberIds: [getSessionUser().id],
     cover: input.name.trim().slice(0, 2).toUpperCase() || "ГР",
   };
   const next = [group, ...loadGroups()];
@@ -94,8 +94,8 @@ export function createGroup(input: {
 export function joinGroup(groupId: string) {
   const next = loadGroups().map((g) => {
     if (g.id !== groupId) return g;
-    if (g.memberIds.includes(currentUser.id)) return g;
-    return { ...g, memberIds: [...g.memberIds, currentUser.id] };
+    if (g.memberIds.includes(getSessionUser().id)) return g;
+    return { ...g, memberIds: [...g.memberIds, getSessionUser().id] };
   });
   saveGroups(next);
   return next;
@@ -104,10 +104,10 @@ export function joinGroup(groupId: string) {
 export function leaveGroup(groupId: string) {
   const next = loadGroups().map((g) => {
     if (g.id !== groupId) return g;
-    if (g.ownerId === currentUser.id) return g;
+    if (g.ownerId === getSessionUser().id) return g;
     return {
       ...g,
-      memberIds: g.memberIds.filter((id) => id !== currentUser.id),
+      memberIds: g.memberIds.filter((id) => id !== getSessionUser().id),
     };
   });
   saveGroups(next);
@@ -116,7 +116,7 @@ export function leaveGroup(groupId: string) {
 
 export function updateGroupPrivacy(groupId: string, privacy: "public" | "private") {
   const next = loadGroups().map((g) =>
-    g.id === groupId && g.ownerId === currentUser.id ? { ...g, privacy } : g,
+    g.id === groupId && g.ownerId === getSessionUser().id ? { ...g, privacy } : g,
   );
   saveGroups(next);
   return next;

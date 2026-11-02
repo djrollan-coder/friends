@@ -1,6 +1,7 @@
 "use client";
 
-import { currentUser, friends } from "@/data/mock";
+import { friends } from "@/data/mock";
+import { getSessionUser } from "@/lib/sessionUser";
 import { useT } from "@/lib/i18n/I18nProvider";
 
 type Props = {
@@ -10,7 +11,7 @@ type Props = {
 export function Stories({ compact = false }: Props) {
   const t = useT();
   const stories = [
-    { id: "me", name: t("stories.yours"), avatar: currentUser.avatar, create: true },
+    { id: "me", name: t("stories.yours"), avatar: getSessionUser().avatar, create: true },
     ...friends.slice(0, 7).map((f) => ({
       id: f.id,
       name: f.name.split(" ")[0],

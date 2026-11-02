@@ -13,18 +13,20 @@ import {
   toggleLike,
   type FeedPost,
 } from "@/lib/feedStore";
-import { currentUser } from "@/data/mock";
+import { getSessionUser } from "@/lib/sessionUser";
 
 export function Wall() {
   const t = useT();
   const [posts, setPosts] = useState<FeedPost[]>([]);
 
   useEffect(() => {
-    setPosts(loadFeed().filter((p) => p.author.id === currentUser.id || !p.groupId));
+    const me = getSessionUser().id;
+    setPosts(loadFeed().filter((p) => p.author.id === me));
   }, []);
 
   function refresh(next: FeedPost[]) {
-    setPosts(next.filter((p) => p.author.id === currentUser.id || !p.groupId));
+    const me = getSessionUser().id;
+    setPosts(next.filter((p) => p.author.id === me));
   }
 
   return (

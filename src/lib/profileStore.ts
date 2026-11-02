@@ -1,4 +1,4 @@
-import { currentUser } from "@/data/mock";
+import { getSessionUser } from "@/lib/sessionUser";
 
 export const PROFILE_BIO_KEY = "friends.profile.bio";
 
@@ -12,28 +12,32 @@ export type ProfileBio = {
 
 const defaults: ProfileBio = {
   status: "Круг близких · без лишнего шума",
-  about:
-    "Friends — место для своих: семья, близкие друзья, общие чаты, музыка и звонки. Не площадка для всех подряд.",
-  city: "Москва",
-  birthday: "1 ноября",
-  relationship: "в близком круге",
+  about: "",
+  city: "",
+  birthday: "",
+  relationship: "",
 };
 
-export function loadProfileBio(): ProfileBio {
+function keyFor(userId?: string) {
+  const id = userId ?? getSessionUser().id;
+  return `${PROFILE_BIO_KEY}.${id}`;
+}
+
+export function loadProfileBio(userId?: string): ProfileBio {
   if (typeof window === "undefined") return defaults;
   try {
-    const raw = localStorage.getItem(PROFILE_BIO_KEY);
-    if (!raw) return defaults;
+    const raw = localStorage.getItem(keyFor(userId));
+    if (!raw) return { ...defaults };
     return { ...defaults, ...(JSON.parse(raw) as Partial<ProfileBio>) };
   } catch {
-    return defaults;
+    return { ...defaults };
   }
 }
 
-export function saveProfileBio(next: ProfileBio) {
-  localStorage.setItem(PROFILE_BIO_KEY, JSON.stringify(next));
+export function saveProfileBio(next: ProfileBio, userId?: string) {
+  localStorage.setItem(keyFor(userId), JSON.stringify(next));
 }
 
-export function clearProfileBio() {
-  localStorage.removeItem(PROFILE_BIO_KEY);
+export function clearProfileBio(userId?: string) {
+  localStorage.removeItem(keyFor(userId));
 }

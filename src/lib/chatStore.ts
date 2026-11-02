@@ -1,4 +1,5 @@
-import { currentUser, friends, messages as seedThreads, type User } from "@/data/mock";
+import { friends, messages as seedThreads, type User } from "@/data/mock";
+import { getSessionUser } from "@/lib/sessionUser";
 import { pushNotification } from "./notify";
 
 export const CHATS_KEY = "friends.chats.v1";
@@ -31,7 +32,7 @@ function seed(): ChatThread[] {
       id: t.id,
       type: "dm" as const,
       title: t.user.name,
-      memberIds: [currentUser.id, t.user.id],
+      memberIds: [getSessionUser().id, t.user.id],
       unread: t.unread,
       messages: [
         {
@@ -46,7 +47,7 @@ function seed(): ChatThread[] {
       id: "gchat1",
       type: "group",
       title: "Friends Team",
-      memberIds: [currentUser.id, friends[0].id, friends[1].id, friends[4].id],
+      memberIds: [getSessionUser().id, friends[0].id, friends[1].id, friends[4].id],
       unread: 0,
       messages: [
         {
@@ -57,7 +58,7 @@ function seed(): ChatThread[] {
         },
         {
           id: "gchat1_2",
-          authorId: currentUser.id,
+          authorId: getSessionUser().id,
           text: "Да, лента и чаты почти готовы",
           createdAt: "17:42",
         },
@@ -108,7 +109,7 @@ export function getChat(id: string) {
 
 export function peerOf(thread: ChatThread): User | undefined {
   if (thread.type !== "dm") return undefined;
-  const peerId = thread.memberIds.find((id) => id !== currentUser.id);
+  const peerId = thread.memberIds.find((id) => id !== getSessionUser().id);
   return friends.find((f) => f.id === peerId) ?? {
     id: peerId ?? "?",
     name: thread.title,
@@ -125,7 +126,7 @@ export function sendChatMessage(
   if (!trimmed) return loadChats();
   const msg: ChatMessage = {
     id: `msg_${Date.now()}`,
-    authorId: currentUser.id,
+    authorId: getSessionUser().id,
     text: trimmed,
     createdAt: nowLabel(),
     silent: opts?.silent || undefined,
@@ -143,11 +144,11 @@ export function createGroupChat(title: string, memberIds: string[]) {
     id: `gchat_${Date.now()}`,
     type: "group",
     title: title.trim() || "Новый чат",
-    memberIds: Array.from(new Set([currentUser.id, ...memberIds])),
+    memberIds: Array.from(new Set([getSessionUser().id, ...memberIds])),
     messages: [
       {
         id: `msg_${Date.now()}`,
-        authorId: currentUser.id,
+        authorId: getSessionUser().id,
         text: "Чат создан",
         createdAt: nowLabel(),
       },
@@ -170,7 +171,7 @@ export function ensureDm(userId: string) {
   const existing = chats.find(
     (c) =>
       c.type === "dm" &&
-      c.memberIds.includes(currentUser.id) &&
+      c.memberIds.includes(getSessionUser().id) &&
       c.memberIds.includes(userId),
   );
   if (existing) return { chats, thread: existing };
@@ -183,7 +184,7 @@ export function ensureDm(userId: string) {
     id: `m_${Date.now()}`,
     type: "dm",
     title: person.name,
-    memberIds: [currentUser.id, userId],
+    memberIds: [getSessionUser().id, userId],
     messages: [],
     unread: 0,
   };

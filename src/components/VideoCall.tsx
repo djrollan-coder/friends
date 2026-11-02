@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { currentUser, friends, type User } from "@/data/mock";
+import { friends, type User } from "@/data/mock";
+import { getSessionUser } from "@/lib/sessionUser";
 import { pushNotification } from "@/lib/notify";
 import { useT } from "@/lib/i18n/I18nProvider";
 
@@ -32,7 +33,7 @@ export function VideoCall({ open, title, mode, participants, onClose }: Props) {
   const [joined, setJoined] = useState<Record<string, boolean>>({});
 
   function resolveUser(id: string): User {
-    if (id === currentUser.id) return currentUser;
+    if (id === getSessionUser().id) return getSessionUser();
     return (
       friends.find((f) => f.id === id) ?? {
         id,
@@ -45,21 +46,21 @@ export function VideoCall({ open, title, mode, participants, onClose }: Props) {
   const people = useMemo(() => {
     const list = participants.length
       ? participants
-      : [{ id: currentUser.id, name: currentUser.name, avatar: currentUser.avatar, isSelf: true }];
-    if (!list.some((p) => p.id === currentUser.id || p.isSelf)) {
+      : [{ id: getSessionUser().id, name: getSessionUser().name, avatar: getSessionUser().avatar, isSelf: true }];
+    if (!list.some((p) => p.id === getSessionUser().id || p.isSelf)) {
       return [
         {
-          id: currentUser.id,
-          name: currentUser.name,
-          avatar: currentUser.avatar,
+          id: getSessionUser().id,
+          name: getSessionUser().name,
+          avatar: getSessionUser().avatar,
           isSelf: true,
         },
         ...list,
       ];
     }
     return list.map((p) =>
-      p.id === currentUser.id || p.isSelf
-        ? { ...p, isSelf: true, name: currentUser.name, avatar: currentUser.avatar }
+      p.id === getSessionUser().id || p.isSelf
+        ? { ...p, isSelf: true, name: getSessionUser().name, avatar: getSessionUser().avatar }
         : p,
     );
   }, [participants]);
@@ -76,12 +77,12 @@ export function VideoCall({ open, title, mode, participants, onClose }: Props) {
 
     const initial: Record<string, boolean> = {};
     for (const p of people) {
-      initial[p.id] = !!p.isSelf || p.id === currentUser.id;
+      initial[p.id] = !!p.isSelf || p.id === getSessionUser().id;
     }
     setJoined(initial);
 
     const timers = people
-      .filter((p) => p.id !== currentUser.id && !p.isSelf)
+      .filter((p) => p.id !== getSessionUser().id && !p.isSelf)
       .map((p, index) =>
         window.setTimeout(() => {
           if (!alive) return;
@@ -167,7 +168,7 @@ export function VideoCall({ open, title, mode, participants, onClose }: Props) {
         className={`video-call-grid cols-${Math.min(4, Math.max(1, people.length))}`}
       >
         {people.map((p) => {
-          const self = p.isSelf || p.id === currentUser.id;
+          const self = p.isSelf || p.id === getSessionUser().id;
           const isJoined = joined[p.id];
           const user = resolveUser(p.id);
           return (

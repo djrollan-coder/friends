@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { currentUser, friends } from "@/data/mock";
+import { friends } from "@/data/mock";
+import { getSessionUser } from "@/lib/sessionUser";
 import {
   findChat,
   getChat,
@@ -52,11 +53,11 @@ export default function MessageThreadPage() {
   const callPeople: CallParticipant[] = useMemo(() => {
     if (!thread) return [];
     return thread.memberIds.map((mid) => {
-      if (mid === currentUser.id) {
+      if (mid === getSessionUser().id) {
         return {
-          id: currentUser.id,
-          name: currentUser.name,
-          avatar: currentUser.avatar,
+          id: getSessionUser().id,
+          name: getSessionUser().name,
+          avatar: getSessionUser().avatar,
           isSelf: true,
         };
       }
@@ -107,8 +108,8 @@ export default function MessageThreadPage() {
           {t("messages.members")}{" "}
           {thread.memberIds
             .map((mid) =>
-              mid === currentUser.id
-                ? currentUser.name
+              mid === getSessionUser().id
+                ? getSessionUser().name
                 : friends.find((f) => f.id === mid)?.name ?? mid,
             )
             .join(", ")}
@@ -125,10 +126,10 @@ export default function MessageThreadPage() {
 
       <div className="vk-list chat-thread">
         {thread.messages.map((msg) => {
-          const mine = msg.authorId === currentUser.id;
+          const mine = msg.authorId === getSessionUser().id;
           const author =
-            msg.authorId === currentUser.id
-              ? currentUser
+            msg.authorId === getSessionUser().id
+              ? getSessionUser()
               : friends.find((f) => f.id === msg.authorId);
           return (
             <div

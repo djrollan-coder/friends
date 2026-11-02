@@ -53,12 +53,31 @@ export async function POST(request: Request) {
   }
 
   const token = process.env.TELEGRAM_BOT_TOKEN!.trim();
+  let photoUrl: string | undefined;
+  try {
+    const photos = await tgApi("getUserProfilePhotos", {
+      user_id: from.id,
+      limit: 1,
+    });
+    const fileId = photos?.result?.photos?.[0]?.[0]?.file_id as string | undefined;
+    if (fileId) {
+      const file = await tgApi("getFile", { file_id: fileId });
+      const path = file?.result?.file_path as string | undefined;
+      if (path) {
+        photoUrl = `https://api.telegram.org/file/bot${token}/${path}`;
+      }
+    }
+  } catch {
+    /* photo optional */
+  }
+
   const loginToken = signBotLoginToken(
     {
       id: from.id,
       first_name: from.first_name,
       last_name: from.last_name,
       username: from.username,
+      photo_url: photoUrl,
     },
     token,
   );

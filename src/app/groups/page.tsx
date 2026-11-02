@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { currentUser } from "@/data/mock";
+import { getSessionUser } from "@/lib/sessionUser";
 import {
   createGroup,
   joinGroup,
@@ -78,7 +78,7 @@ export default function GroupsPage() {
 
       <div className="vk-list">
         {groups.map((group) => {
-          const joined = group.memberIds.includes(currentUser.id);
+          const joined = group.memberIds.includes(getSessionUser().id);
           return (
             <div key={group.id} className="vk-list-row">
               <div className="vk-avatar sm">{group.cover}</div>
@@ -92,7 +92,7 @@ export default function GroupsPage() {
               <div className="vk-list-meta friends-actions">
                 <span>{t("groups.members", { n: group.memberIds.length })}</span>
                 {joined ? (
-                  group.ownerId === currentUser.id ? (
+                  group.ownerId === getSessionUser().id ? (
                     <span>{t("groups.youAdmin")}</span>
                   ) : (
                     <button type="button" onClick={() => setGroups(leaveGroup(group.id))}>

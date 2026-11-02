@@ -1,4 +1,5 @@
-import { currentUser, friends as seedFriends, type User } from "@/data/mock";
+import { friends as seedFriends, type User } from "@/data/mock";
+import { getSessionUser } from "@/lib/sessionUser";
 import { pushNotification } from "./notify";
 
 export const FRIENDS_KEY = "friends.social.friends.v1";
@@ -92,14 +93,14 @@ export function saveFriendsState(next: FriendsState) {
 }
 
 export function getPerson(id: string) {
-  if (id === currentUser.id) return currentUser;
+  if (id === getSessionUser().id) return getSessionUser();
   return peopleDirectory.find((p) => p.id === id);
 }
 
 export function searchPeople(query: string, state = loadFriendsState()) {
   const q = query.trim().toLowerCase();
   return peopleDirectory.filter((p) => {
-    if (p.id === currentUser.id) return false;
+    if (p.id === getSessionUser().id) return false;
     if (!q) return true;
     return (
       p.name.toLowerCase().includes(q) ||
@@ -126,7 +127,7 @@ export function recommendations(state = loadFriendsState()) {
       !state.friendIds.includes(p.id) &&
       !state.incoming.includes(p.id) &&
       !state.outgoing.includes(p.id) &&
-      p.id !== currentUser.id,
+      p.id !== getSessionUser().id,
   );
 }
 
