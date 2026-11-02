@@ -6,7 +6,6 @@ import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { findAccount, registerAccount } from "@/lib/accounts";
 import { consumeInvite, validateInvite } from "@/lib/circleStore";
 import { useT } from "@/lib/i18n/I18nProvider";
-import { startTelegramQrLogin } from "@/lib/telegramOAuth";
 import "@/app/login/login.css";
 
 type QrPayload = {
@@ -23,6 +22,12 @@ type TgConfig = {
   botId: string | null;
 };
 
+type BotLoginUi = {
+  botUsername: string;
+  deepLink: string;
+  qrDataUrl: string;
+};
+
 export function LoginScreen() {
   const { login } = useAuth();
   const t = useT();
@@ -32,6 +37,7 @@ export function LoginScreen() {
   const [qrStatus, setQrStatus] = useState<"loading" | "pending" | "confirmed" | "expired" | "error">("loading");
   const [tgBusy, setTgBusy] = useState(false);
   const [tgConfig, setTgConfig] = useState<TgConfig | null>(null);
+  const [botLogin, setBotLogin] = useState<BotLoginUi | null>(null);
   const [tgError, setTgError] = useState("");
   const [name, setName] = useState("");
   const [invite, setInvite] = useState("");
@@ -47,6 +53,13 @@ export function LoginScreen() {
         const res = await fetch("/api/auth/telegram/config");
         const data = (await res.json()) as TgConfig;
         if (!cancelled) setTgConfig(data);
+        if (data.configured) {
+          const botRes = await fetch("/api/auth/telegram/bot-login");
+          if (botRes.ok) {
+            const botData = (await botRes.json()) as BotLoginUi;
+            if (!cancelled) setBotLogin(botData);
+          }
+        }
       } catch {
         if (!cancelled) {
           setTgConfig({ configured: false, botUsername: null, botId: null });
@@ -120,15 +133,15 @@ export function LoginScreen() {
     setTgBusy(false);
   }
 
-  function startTelegramQr() {
+  function openTelegramBot() {
     setTgError("");
-    if (!tgConfig?.botId) {
+    const link = botLogin?.deepLink;
+    if (!link) {
       setTgError(t("login.telegramNotConfigured"));
       return;
     }
     setTgBusy(true);
-    // Full-page OAuth: after QR confirm Telegram returns to /login/telegram.
-    startTelegramQrLogin(tgConfig.botId);
+    window.location.href = link;
   }
 
   async function loginEmail(e: FormEvent) {
@@ -316,24 +329,34 @@ export function LoginScreen() {
           <div className="auth-panel">
             <p className="auth-text">
               {tgConfig?.configured
-                ? t("login.telegramQrHint")
+                ? t("login.telegramBotHint")
                 : t("login.telegramHint")}
             </p>
-            {tgConfig?.configured && tgConfig.botId ? (
+            {tgConfig?.configured && botLogin ? (
               <>
+                <div className="auth-qr-box">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={botLogin.qrDataUrl}
+                    alt={t("login.telegramBotQrAlt")}
+                    className="auth-qr-img"
+                  />
+                </div>
                 <button
                   type="button"
                   className="auth-telegram-btn"
-                  onClick={startTelegramQr}
+                  onClick={openTelegramBot}
                   disabled={tgBusy}
                 >
                   <span className="auth-tg-icon" aria-hidden>
-                    ▣
+                    ▶
                   </span>
-                  {tgBusy ? t("login.telegramQrWaiting") : t("login.telegramQrBtn")}
+                  {tgBusy ? t("login.telegramQrWaiting") : t("login.telegramBotBtn")}
                 </button>
-                <div className="auth-muted">{t("login.telegramQrSteps")}</div>
+                <div className="auth-muted">{t("login.telegramBotSteps")}</div>
               </>
+            ) : tgConfig?.configured ? (
+              <div className="auth-muted">{t("login.qrLoading")}</div>
             ) : (
               <button
                 type="button"

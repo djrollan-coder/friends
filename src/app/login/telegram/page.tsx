@@ -3,11 +3,11 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import { AUTH_STORAGE_KEY } from "@/lib/auth";
+import { AUTH_STORAGE_KEY, type AuthUser } from "@/lib/auth";
 import type { TelegramLoginPayload } from "@/lib/telegramTypes";
 import "@/app/login/login.css";
 
-function readPayloadFromLocation(search: URLSearchParams): TelegramLoginPayload | null {
+function readOauthPayload(search: URLSearchParams): TelegramLoginPayload | null {
   const fromSearch = {
     id: search.get("id") ?? "",
     first_name: search.get("first_name") ?? "",
@@ -17,11 +17,8 @@ function readPayloadFromLocation(search: URLSearchParams): TelegramLoginPayload 
     auth_date: search.get("auth_date") ?? "",
     hash: search.get("hash") ?? "",
   };
-  if (fromSearch.id && fromSearch.first_name && fromSearch.hash) {
-    return fromSearch;
-  }
+  if (fromSearch.id && fromSearch.first_name && fromSearch.hash) return fromSearch;
 
-  // Some Telegram clients return fields in the URL hash.
   if (typeof window === "undefined") return null;
   const hash = window.location.hash.replace(/^#/, "");
   if (!hash) return null;
@@ -39,6 +36,25 @@ function readPayloadFromLocation(search: URLSearchParams): TelegramLoginPayload 
   return null;
 }
 
+function finishLogin(user: AuthUser, login: (u: AuthUser) => void) {
+  login(user);
+  try {
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+  } catch {
+    /* ignore */
+  }
+  if (typeof window !== "undefined" && window.opener && !window.opener.closed) {
+    try {
+      window.opener.location.href = "/";
+    } catch {
+      /* ignore */
+    }
+    window.close();
+    return;
+  }
+  window.location.replace("/");
+}
+
 function TelegramCallbackInner() {
   const router = useRouter();
   const params = useSearchParams();
@@ -46,15 +62,32 @@ function TelegramCallbackInner() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const payload = readPayloadFromLocation(params);
-    if (!payload) {
-      setError("missing_params");
-      return;
-    }
-
+    const botToken = params.get("t");
     let cancelled = false;
+
     (async () => {
       try {
+        if (botToken) {
+          const res = await fetch("/api/auth/telegram/exchange", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ t: botToken }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.user) {
+            if (!cancelled) setError(data.error ?? "invalid_token");
+            return;
+          }
+          if (!cancelled) finishLogin(data.user as AuthUser, login);
+          return;
+        }
+
+        const payload = readOauthPayload(params);
+        if (!payload) {
+          if (!cancelled) setError("missing_params");
+          return;
+        }
+
         const res = await fetch("/api/auth/telegram", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -65,23 +98,7 @@ function TelegramCallbackInner() {
           if (!cancelled) setError(data.error ?? "invalid_telegram");
           return;
         }
-        login(data.user);
-        // Ensure session is written even if React state races with navigation.
-        try {
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data.user));
-        } catch {
-          /* ignore */
-        }
-        if (typeof window !== "undefined" && window.opener && !window.opener.closed) {
-          try {
-            window.opener.location.href = "/";
-          } catch {
-            /* ignore */
-          }
-          window.close();
-          return;
-        }
-        window.location.replace("/");
+        if (!cancelled) finishLogin(data.user as AuthUser, login);
       } catch {
         if (!cancelled) setError("network");
       }
@@ -90,7 +107,7 @@ function TelegramCallbackInner() {
     return () => {
       cancelled = true;
     };
-  }, [params, login, router]);
+  }, [params, login]);
 
   return (
     <div className="auth-page">
