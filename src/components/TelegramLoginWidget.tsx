@@ -24,9 +24,12 @@ export function TelegramLoginWidget({ botUsername, onAuth, onError }: Props) {
     const host = hostRef.current;
     if (!host || !botUsername) return;
 
+    // Keep callback as fallback if Telegram calls it without redirect.
     window.onFriendsTelegramAuth = (user) => {
       onAuthRef.current(user);
     };
+
+    const authUrl = `${window.location.origin}/login/telegram`;
 
     host.innerHTML = "";
     const script = document.createElement("script");
@@ -35,7 +38,8 @@ export function TelegramLoginWidget({ botUsername, onAuth, onError }: Props) {
     script.setAttribute("data-telegram-login", botUsername);
     script.setAttribute("data-size", "large");
     script.setAttribute("data-radius", "12");
-    script.setAttribute("data-onauth", "onFriendsTelegramAuth(user)");
+    // Redirect mode is more reliable than onauth popup on desktop.
+    script.setAttribute("data-auth-url", authUrl);
     script.setAttribute("data-request-access", "write");
     script.onerror = () => onError?.();
     host.appendChild(script);

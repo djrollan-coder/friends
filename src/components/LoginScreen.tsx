@@ -342,6 +342,7 @@ export function LoginScreen() {
                   onAuth={onTelegramAuth}
                   onError={() => setTgError(t("login.telegramWidgetFail"))}
                 />
+                <div className="auth-muted">{t("login.telegramConfirmHint")}</div>
                 {tgBusy ? (
                   <div className="auth-muted">{t("login.signingIn")}</div>
                 ) : null}
