@@ -3,11 +3,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
-import { TelegramLoginWidget } from "@/components/TelegramLoginWidget";
 import { findAccount, registerAccount } from "@/lib/accounts";
 import { consumeInvite, validateInvite } from "@/lib/circleStore";
 import { useT } from "@/lib/i18n/I18nProvider";
-import type { TelegramLoginPayload } from "@/lib/telegramTypes";
+import { openTelegramQrLogin } from "@/lib/telegramOAuth";
 import "@/app/login/login.css";
 
 type QrPayload = {
@@ -21,6 +20,7 @@ type Tab = "email" | "telegram" | "qr";
 type TgConfig = {
   configured: boolean;
   botUsername: string | null;
+  botId: string | null;
 };
 
 export function LoginScreen() {
@@ -33,6 +33,7 @@ export function LoginScreen() {
   const [tgBusy, setTgBusy] = useState(false);
   const [tgConfig, setTgConfig] = useState<TgConfig | null>(null);
   const [tgError, setTgError] = useState("");
+  const [tgWaitingQr, setTgWaitingQr] = useState(false);
   const [name, setName] = useState("");
   const [invite, setInvite] = useState("");
   const [email, setEmail] = useState("");
@@ -48,13 +49,42 @@ export function LoginScreen() {
         const data = (await res.json()) as TgConfig;
         if (!cancelled) setTgConfig(data);
       } catch {
-        if (!cancelled) setTgConfig({ configured: false, botUsername: null });
+        if (!cancelled) {
+          setTgConfig({ configured: false, botUsername: null, botId: null });
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  // After QR auth in popup, session lands in this tab via storage + focus.
+  useEffect(() => {
+    if (!tgWaitingQr) return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "friends.auth" && e.newValue) {
+        window.location.assign("/");
+      }
+    };
+    const onFocus = () => {
+      try {
+        if (localStorage.getItem("friends.auth")) {
+          window.location.assign("/");
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", onFocus);
+    const timer = window.setInterval(onFocus, 1500);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(timer);
+    };
+  }, [tgWaitingQr]);
 
   const startQr = useCallback(async () => {
     setQrStatus("loading");
@@ -118,34 +148,21 @@ export function LoginScreen() {
     setTgBusy(false);
   }
 
-  const onTelegramAuth = useCallback(
-    async (payload: TelegramLoginPayload) => {
-      setTgBusy(true);
-      setTgError("");
-      try {
-        const res = await fetch("/api/auth/telegram", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-        if (!res.ok || !data.user) {
-          setTgError(
-            data.error === "telegram_not_configured"
-              ? t("login.telegramNotConfigured")
-              : t("login.telegramFail"),
-          );
-          return;
-        }
-        login(data.user);
-      } catch {
-        setTgError(t("login.network"));
-      } finally {
-        setTgBusy(false);
-      }
-    },
-    [login, t],
-  );
+  function startTelegramQr() {
+    setTgError("");
+    if (!tgConfig?.botId) {
+      setTgError(t("login.telegramNotConfigured"));
+      return;
+    }
+    const popup = openTelegramQrLogin(tgConfig.botId);
+    if (!popup) {
+      // Popup blocked — full-page redirect with QR.
+      window.location.href = `https://oauth.telegram.org/auth?bot_id=${encodeURIComponent(tgConfig.botId)}&origin=${encodeURIComponent(window.location.origin)}&request_access=write&return_to=${encodeURIComponent(`${window.location.origin}/login/telegram`)}`;
+      return;
+    }
+    setTgBusy(true);
+    setTgWaitingQr(true);
+  }
 
   async function loginEmail(e: FormEvent) {
     e.preventDefault();
@@ -332,20 +349,25 @@ export function LoginScreen() {
           <div className="auth-panel">
             <p className="auth-text">
               {tgConfig?.configured
-                ? t("login.telegramHintLive")
+                ? t("login.telegramQrHint")
                 : t("login.telegramHint")}
             </p>
-            {tgConfig?.configured && tgConfig.botUsername ? (
+            {tgConfig?.configured && tgConfig.botId ? (
               <>
-                <TelegramLoginWidget
-                  botUsername={tgConfig.botUsername}
-                  onAuth={onTelegramAuth}
-                  onError={() => setTgError(t("login.telegramWidgetFail"))}
-                />
-                <div className="auth-muted">{t("login.telegramConfirmHint")}</div>
-                {tgBusy ? (
-                  <div className="auth-muted">{t("login.signingIn")}</div>
-                ) : null}
+                <button
+                  type="button"
+                  className="auth-telegram-btn"
+                  onClick={startTelegramQr}
+                  disabled={tgBusy}
+                >
+                  <span className="auth-tg-icon" aria-hidden>
+                    ▣
+                  </span>
+                  {tgWaitingQr
+                    ? t("login.telegramQrWaiting")
+                    : t("login.telegramQrBtn")}
+                </button>
+                <div className="auth-muted">{t("login.telegramQrSteps")}</div>
               </>
             ) : (
               <button

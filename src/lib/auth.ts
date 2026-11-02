@@ -39,7 +39,13 @@ export function isDemoTelegramUser(user: AuthUser | null | undefined) {
   );
 }
 
-export function telegramLoginUrl(botUsername: string, origin: string) {
-  const returnTo = encodeURIComponent(`${origin}/login/telegram`);
-  return `https://oauth.telegram.org/auth?bot_id=${encodeURIComponent(botUsername)}&origin=${encodeURIComponent(origin)}&request_access=write&return_to=${returnTo}`;
+export function telegramLoginUrl(botId: string, origin: string) {
+  const returnTo = `${origin}/login/telegram`;
+  const params = new URLSearchParams({
+    bot_id: botId,
+    origin,
+    request_access: "write",
+    return_to: returnTo,
+  });
+  return `https://oauth.telegram.org/auth?${params.toString()}`;
 }

@@ -42,6 +42,16 @@ function TelegramCallbackInner() {
           return;
         }
         login(data.user);
+        // Popup QR flow: bounce opener and close; otherwise go home.
+        if (typeof window !== "undefined" && window.opener && !window.opener.closed) {
+          try {
+            window.opener.location.href = "/";
+          } catch {
+            /* cross-origin — storage event will wake the opener */
+          }
+          window.close();
+          return;
+        }
         router.replace("/");
       } catch {
         if (!cancelled) setError("network");

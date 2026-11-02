@@ -83,6 +83,17 @@ export function telegramBotUsername() {
   );
 }
 
+/** Numeric bot id from TELEGRAM_BOT_TOKEN (`123456:AA...`). */
+export function telegramBotId() {
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
+  const id = token.split(":")[0] ?? "";
+  return /^\d+$/.test(id) ? id : "";
+}
+
 export function telegramConfigured() {
-  return Boolean(process.env.TELEGRAM_BOT_TOKEN?.trim() && telegramBotUsername());
+  return Boolean(
+    process.env.TELEGRAM_BOT_TOKEN?.trim() &&
+      telegramBotUsername() &&
+      telegramBotId(),
+  );
 }
