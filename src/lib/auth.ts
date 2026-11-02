@@ -30,6 +30,15 @@ export function clearAuth() {
   localStorage.removeItem(AUTH_STORAGE_KEY);
 }
 
+/** Old mock Telegram login before the real widget was wired. */
+export function isDemoTelegramUser(user: AuthUser | null | undefined) {
+  return Boolean(
+    user &&
+      user.method === "telegram" &&
+      (user.id === "tg-42" || user.username === "roman"),
+  );
+}
+
 export function telegramLoginUrl(botUsername: string, origin: string) {
   const returnTo = encodeURIComponent(`${origin}/login/telegram`);
   return `https://oauth.telegram.org/auth?bot_id=${encodeURIComponent(botUsername)}&origin=${encodeURIComponent(origin)}&request_access=write&return_to=${returnTo}`;

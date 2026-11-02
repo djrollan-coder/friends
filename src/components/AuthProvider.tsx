@@ -12,6 +12,7 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import {
   clearAuth,
+  isDemoTelegramUser,
   loadAuth,
   saveAuth,
   type AuthUser,
@@ -34,7 +35,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      setUser(loadAuth());
+      const stored = loadAuth();
+      // Drop leftover demo Telegram sessions so real Login Widget is used.
+      if (isDemoTelegramUser(stored)) {
+        clearAuth();
+        setUser(null);
+      } else {
+        setUser(stored);
+      }
     } catch {
       setUser(null);
     }
