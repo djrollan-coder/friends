@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
+import { TelegramLoginWidget } from "@/components/TelegramLoginWidget";
 import { findAccount, registerAccount } from "@/lib/accounts";
 import { consumeInvite, validateInvite } from "@/lib/circleStore";
 import { useT } from "@/lib/i18n/I18nProvider";
+import type { TelegramLoginPayload } from "@/lib/telegramTypes";
 import "@/app/login/login.css";
 
 type QrPayload = {
@@ -16,6 +18,11 @@ type QrPayload = {
 
 type Tab = "email" | "telegram" | "qr";
 
+type TgConfig = {
+  configured: boolean;
+  botUsername: string | null;
+};
+
 export function LoginScreen() {
   const { login } = useAuth();
   const t = useT();
@@ -24,12 +31,30 @@ export function LoginScreen() {
   const [qr, setQr] = useState<QrPayload | null>(null);
   const [qrStatus, setQrStatus] = useState<"loading" | "pending" | "confirmed" | "expired" | "error">("loading");
   const [tgBusy, setTgBusy] = useState(false);
+  const [tgConfig, setTgConfig] = useState<TgConfig | null>(null);
+  const [tgError, setTgError] = useState("");
   const [name, setName] = useState("");
   const [invite, setInvite] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailError, setEmailError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/telegram/config");
+        const data = (await res.json()) as TgConfig;
+        if (!cancelled) setTgConfig(data);
+      } catch {
+        if (!cancelled) setTgConfig({ configured: false, botUsername: null });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const startQr = useCallback(async () => {
     setQrStatus("loading");
@@ -79,9 +104,10 @@ export function LoginScreen() {
     return () => clearInterval(timer);
   }, [tab, qr, qrStatus, login]);
 
-  async function loginTelegram() {
+  async function loginTelegramDemo() {
     setTgBusy(true);
-    await new Promise((r) => setTimeout(r, 500));
+    setTgError("");
+    await new Promise((r) => setTimeout(r, 400));
     login({
       id: "tg-42",
       name: "Роман Моторный",
@@ -91,6 +117,35 @@ export function LoginScreen() {
     });
     setTgBusy(false);
   }
+
+  const onTelegramAuth = useCallback(
+    async (payload: TelegramLoginPayload) => {
+      setTgBusy(true);
+      setTgError("");
+      try {
+        const res = await fetch("/api/auth/telegram", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.user) {
+          setTgError(
+            data.error === "telegram_not_configured"
+              ? t("login.telegramNotConfigured")
+              : t("login.telegramFail"),
+          );
+          return;
+        }
+        login(data.user);
+      } catch {
+        setTgError(t("login.network"));
+      } finally {
+        setTgBusy(false);
+      }
+    },
+    [login, t],
+  );
 
   async function loginEmail(e: FormEvent) {
     e.preventDefault();
@@ -275,18 +330,39 @@ export function LoginScreen() {
 
         {tab === "telegram" ? (
           <div className="auth-panel">
-            <p className="auth-text">{t("login.telegramHint")}</p>
-            <button
-              type="button"
-              className="auth-telegram-btn"
-              onClick={loginTelegram}
-              disabled={tgBusy}
-            >
-              <span className="auth-tg-icon" aria-hidden>
-                ▶
-              </span>
-              {tgBusy ? t("login.signingIn") : t("login.telegramBtn")}
-            </button>
+            <p className="auth-text">
+              {tgConfig?.configured
+                ? t("login.telegramHintLive")
+                : t("login.telegramHint")}
+            </p>
+            {tgConfig?.configured && tgConfig.botUsername ? (
+              <>
+                <TelegramLoginWidget
+                  botUsername={tgConfig.botUsername}
+                  onAuth={onTelegramAuth}
+                  onError={() => setTgError(t("login.telegramWidgetFail"))}
+                />
+                {tgBusy ? (
+                  <div className="auth-muted">{t("login.signingIn")}</div>
+                ) : null}
+              </>
+            ) : (
+              <button
+                type="button"
+                className="auth-telegram-btn"
+                onClick={loginTelegramDemo}
+                disabled={tgBusy}
+              >
+                <span className="auth-tg-icon" aria-hidden>
+                  ▶
+                </span>
+                {tgBusy ? t("login.signingIn") : t("login.telegramBtn")}
+              </button>
+            )}
+            {tgError ? <div className="auth-error">{tgError}</div> : null}
+            {!tgConfig?.configured ? (
+              <div className="auth-muted">{t("login.telegramSetup")}</div>
+            ) : null}
           </div>
         ) : null}
 

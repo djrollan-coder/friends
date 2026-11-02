@@ -3,6 +3,8 @@ export type AuthUser = {
   name: string;
   username?: string;
   avatar: string;
+  /** Telegram (or other) profile photo URL when available */
+  photoUrl?: string;
   method: "telegram" | "qr" | "email";
   email?: string;
 };

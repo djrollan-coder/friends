@@ -425,6 +425,12 @@ select:-webkit-autofill {
   font-weight: 700;
 }
 
+.vk-header-avatar-img {
+  object-fit: cover;
+  padding: 0;
+  background: transparent;
+}
+
 .vk-shell {
   width: min(var(--vk-width), 100%);
   margin: 0 auto;

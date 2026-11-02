@@ -177,6 +177,12 @@
   font-size: 11px;
 }
 
+.auth-tg-widget {
+  display: flex;
+  justify-content: center;
+  min-height: 40px;
+}
+
 .auth-qr-box {
   min-height: 280px;
   background: rgba(255, 255, 255, 0.92);

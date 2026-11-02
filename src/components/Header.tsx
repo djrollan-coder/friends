@@ -84,7 +84,18 @@ export function Header() {
             title={t("header.logout")}
             onClick={logout}
           >
-            <span className="vk-header-avatar">{avatar}</span>
+            {user?.photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                className="vk-header-avatar vk-header-avatar-img"
+                src={user.photoUrl}
+                alt=""
+                width={28}
+                height={28}
+              />
+            ) : (
+              <span className="vk-header-avatar">{avatar}</span>
+            )}
           </button>
         </nav>
       </div>
