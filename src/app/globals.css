@@ -1579,16 +1579,67 @@ html.is-native-ios.is-native-safe-inset .vk-page.has-mobile-nav {
   font-size: 12px;
 }
 
-.friends-list,
-.friends-row {
+.friends-page.vk-card {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.friends-list {
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.friends-swipe {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   touch-action: pan-y;
-  overscroll-behavior-x: none;
+}
+
+.friends-swipe:last-child {
+  border-bottom: 0;
+}
+
+.friends-swipe-delete {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 88px;
+  border: 0;
+  background: #c94b4b;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.friends-swipe-front {
+  position: relative;
+  z-index: 1;
+  background: var(--vk-bg);
+  transition: transform 0.18s ease;
+  touch-action: pan-y;
+  will-change: transform;
+}
+
+.friends-swipe-front:active {
+  transition: none;
 }
 
 .friends-row {
-  overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
+  border-bottom: 0 !important;
+  background: transparent !important;
 }
 
 .friends-row-main {
@@ -1596,38 +1647,38 @@ html.is-native-ios.is-native-safe-inset .vk-page.has-mobile-nav {
   flex: 1;
 }
 
+.friends-avatar-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
 @media (max-width: 900px) {
-  /* No swipe-to-delete tray on phone — only explicit buttons */
   .friends-row {
     align-items: center;
     gap: 10px;
-    padding: 12px 12px;
+    padding: 12px 4px;
   }
 
-  .friends-actions {
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: 6px;
-    margin-left: 0;
+  .friends-page .vk-page-title {
+    padding: 0 4px;
   }
 
-  .friends-write-btn {
-    border: 0 !important;
-    background: transparent !important;
-    color: var(--vk-link) !important;
-    padding: 8px 6px !important;
-    font-weight: 650;
-    white-space: nowrap;
+  .friends-tabs,
+  .friends-page .vk-counts,
+  .friends-page .settings-search {
+    margin-left: 4px;
+    margin-right: 4px;
   }
+}
 
-  .friends-remove-btn {
-    border: 0 !important;
-    background: transparent !important;
-    color: #9a9b9f !important;
-    padding: 8px 4px !important;
-    font-size: 11px !important;
-    white-space: nowrap;
+@media (min-width: 901px) {
+  /* Desktop: no swipe tray needed — show delete via long context? keep swipe too */
+  .friends-swipe-front {
+    background: transparent;
   }
 }
 

@@ -19,6 +19,7 @@ import {
 import { ensureDm } from "@/lib/chatStore";
 import { useRouter } from "next/navigation";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { SwipeFriendRow } from "@/components/SwipeFriendRow";
 
 type Tab = "all" | "requests" | "outgoing" | "search" | "recommended" | "following";
 
@@ -116,40 +117,37 @@ function FriendsInner() {
       </div>
 
       {tab === "all" ? (
-        <div className="vk-list friends-list">
+        <div className="friends-list">
           {friends.map((friend) =>
             friend ? (
-              <div key={friend.id} className="vk-list-row friends-row">
-                <div className="vk-avatar sm">{friend.avatar}</div>
-                <div className="friends-row-main">
-                  <Link href="/">{friend.name}</Link>
-                  {friend.online ? (
-                    <span className="vk-online-dot" title={t("common.online")} />
-                  ) : null}
-                  <div style={{ color: "var(--vk-muted)", marginTop: 2 }}>
-                    {friend.online ? t("friends.onlineNow") : t("friends.wasRecently")}
-                  </div>
-                </div>
-                <div className="vk-list-meta friends-actions">
+              <SwipeFriendRow
+                key={friend.id}
+                deleteLabel={t("friends.remove")}
+                onDelete={() => {
+                  if (!window.confirm(t("friends.removeConfirm"))) return;
+                  setState(removeFriend(state, friend.id));
+                }}
+              >
+                <div className="vk-list-row friends-row">
                   <button
                     type="button"
-                    className="friends-write-btn"
+                    className="friends-avatar-btn"
+                    aria-label={t("friends.write")}
                     onClick={() => openDm(friend.id)}
                   >
-                    {t("friends.write")}
+                    <div className="vk-avatar sm">{friend.avatar}</div>
                   </button>
-                  <button
-                    type="button"
-                    className="friends-remove-btn"
-                    onClick={() => {
-                      if (!window.confirm(t("friends.removeConfirm"))) return;
-                      setState(removeFriend(state, friend.id));
-                    }}
-                  >
-                    {t("friends.remove")}
-                  </button>
+                  <div className="friends-row-main">
+                    <Link href="/">{friend.name}</Link>
+                    {friend.online ? (
+                      <span className="vk-online-dot" title={t("common.online")} />
+                    ) : null}
+                    <div style={{ color: "var(--vk-muted)", marginTop: 2 }}>
+                      {friend.online ? t("friends.onlineNow") : t("friends.wasRecently")}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </SwipeFriendRow>
             ) : null,
           )}
         </div>
