@@ -182,13 +182,13 @@ export default function MessageThreadPage() {
         isDm={thread.type === "dm"}
         onSend={(text) => {
           sendChatMessage(thread.id, text);
-          setThread(getChat(thread.id) ?? null);
+          setThread(findChat(thread.id) ?? null);
         }}
         onSendSilent={(text) => {
           sendChatMessage(thread.id, text, { silent: true });
-          setThread(getChat(thread.id) ?? null);
+          setThread(findChat(thread.id) ?? null);
         }}
-        onScheduled={() => setThread(getChat(thread.id) ?? null)}
+        onScheduled={() => setThread(findChat(thread.id) ?? null)}
       />
     </div>
   );
