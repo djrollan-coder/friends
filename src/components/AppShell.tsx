@@ -14,6 +14,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { ready, user } = useAuth();
   const isLogin = pathname === "/login" || pathname.startsWith("/login/");
+  const isManage = pathname === "/manage" || pathname.startsWith("/manage/");
 
   // Login UI must render even before auth hydrates — otherwise LAN clients
   // stuck behind a blocked /_next payload never leave the boot screen.
@@ -42,6 +43,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <>{children}</>;
+  }
+
+  if (isManage) {
+    return (
+      <div className="vk-page admin-shell">
+        <Header />
+        <main className="admin-shell-main">{children}</main>
+        <ScheduledSendRunner />
+      </div>
+    );
   }
 
   return (
