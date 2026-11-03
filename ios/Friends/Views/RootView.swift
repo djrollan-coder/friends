@@ -129,7 +129,7 @@ private struct FriendsWebContainer: UIViewRepresentable {
                     webView.load(URLRequest(url: url))
                 } else if bridge.isTelegramHost(url) {
                     UIApplication.shared.open(url, options: [:], completionHandler: nil)
-                } else if let url {
+                } else {
                     UIApplication.shared.open(url, options: [:], completionHandler: nil)
                 }
             }

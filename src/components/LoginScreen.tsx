@@ -26,6 +26,7 @@ type BotLoginUi = {
   botUsername: string;
   deepLink: string;
   qrDataUrl: string;
+  sessionToken: string;
 };
 
 export function LoginScreen() {
@@ -36,6 +37,7 @@ export function LoginScreen() {
   const [qr, setQr] = useState<QrPayload | null>(null);
   const [qrStatus, setQrStatus] = useState<"loading" | "pending" | "confirmed" | "expired" | "error">("loading");
   const [tgBusy, setTgBusy] = useState(false);
+  const [tgWaiting, setTgWaiting] = useState(false);
   const [tgConfig, setTgConfig] = useState<TgConfig | null>(null);
   const [botLogin, setBotLogin] = useState<BotLoginUi | null>(null);
   const [tgError, setTgError] = useState("");
@@ -46,6 +48,12 @@ export function LoginScreen() {
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailError, setEmailError] = useState("");
 
+  const refreshBotLogin = useCallback(async () => {
+    const botRes = await fetch("/api/auth/telegram/bot-login?session=1");
+    if (!botRes.ok) throw new Error("bot_login_failed");
+    return (await botRes.json()) as BotLoginUi;
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -54,11 +62,8 @@ export function LoginScreen() {
         const data = (await res.json()) as TgConfig;
         if (!cancelled) setTgConfig(data);
         if (data.configured) {
-          const botRes = await fetch("/api/auth/telegram/bot-login");
-          if (botRes.ok) {
-            const botData = (await botRes.json()) as BotLoginUi;
-            if (!cancelled) setBotLogin(botData);
-          }
+          const botData = await refreshBotLogin();
+          if (!cancelled) setBotLogin(botData);
         }
       } catch {
         if (!cancelled) {
@@ -69,7 +74,38 @@ export function LoginScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshBotLogin]);
+
+  useEffect(() => {
+    if (!tgWaiting || !botLogin?.sessionToken) return;
+
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/auth/telegram/bot-session/${botLogin.sessionToken}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status === "confirmed" && data.user) {
+          setTgWaiting(false);
+          setTgBusy(false);
+          login({
+            id: data.user.id,
+            name: data.user.name,
+            username: data.user.username,
+            avatar: data.user.avatar,
+            method: "telegram",
+          });
+        } else if (data.status === "expired") {
+          setTgWaiting(false);
+          setTgBusy(false);
+          setTgError(t("login.telegramSessionExpired"));
+        }
+      } catch {
+        /* ignore transient errors */
+      }
+    }, 1500);
+
+    return () => clearInterval(timer);
+  }, [tgWaiting, botLogin, login, t]);
 
   const startQr = useCallback(async () => {
     setQrStatus("loading");
@@ -133,25 +169,33 @@ export function LoginScreen() {
     setTgBusy(false);
   }
 
-  function openTelegramBot() {
+  async function openTelegramBot() {
     setTgError("");
-    const link = botLogin?.deepLink;
-    if (!link) {
-      setTgError(t("login.telegramNotConfigured"));
-      return;
-    }
     setTgBusy(true);
-    // Native iOS shell: open Telegram externally, keep Friends WebView on /login.
-    const native = (window as Window & {
-      __FRIENDS_NATIVE__?: boolean;
-      webkit?: { messageHandlers?: { friends?: { postMessage: (v: unknown) => void } } };
-    }).webkit?.messageHandlers?.friends;
-    if ((window as Window & { __FRIENDS_NATIVE__?: boolean }).__FRIENDS_NATIVE__ && native) {
-      native.postMessage({ type: "openTelegram", url: link });
+    try {
+      const session = await refreshBotLogin();
+      setBotLogin(session);
+      setTgWaiting(true);
+
+      const native = (window as Window & {
+        __FRIENDS_NATIVE__?: boolean;
+        webkit?: { messageHandlers?: { friends?: { postMessage: (v: unknown) => void } } };
+      }).webkit?.messageHandlers?.friends;
+
+      // Native shell: open Telegram app, keep WebView on /login and poll session.
+      if ((window as Window & { __FRIENDS_NATIVE__?: boolean }).__FRIENDS_NATIVE__ && native) {
+        native.postMessage({ type: "openTelegram", url: session.deepLink });
+        return;
+      }
+
+      // Browser: open Telegram in a new tab/app, stay on login and poll.
+      window.open(session.deepLink, "_blank", "noopener,noreferrer");
+    } catch {
+      setTgWaiting(false);
+      setTgError(t("login.telegramNotConfigured"));
+    } finally {
       setTgBusy(false);
-      return;
     }
-    window.location.href = link;
   }
 
   async function loginEmail(e: FormEvent) {
@@ -355,15 +399,21 @@ export function LoginScreen() {
                 <button
                   type="button"
                   className="auth-telegram-btn"
-                  onClick={openTelegramBot}
-                  disabled={tgBusy}
+                  onClick={() => void openTelegramBot()}
+                  disabled={tgBusy || tgWaiting}
                 >
                   <span className="auth-tg-icon" aria-hidden>
                     ▶
                   </span>
-                  {tgBusy ? t("login.telegramQrWaiting") : t("login.telegramBotBtn")}
+                  {tgWaiting
+                    ? t("login.telegramQrWaiting")
+                    : tgBusy
+                      ? t("login.signingIn")
+                      : t("login.telegramBotBtn")}
                 </button>
-                <div className="auth-muted">{t("login.telegramBotSteps")}</div>
+                <div className="auth-muted">
+                  {tgWaiting ? t("login.telegramBotWaiting") : t("login.telegramBotSteps")}
+                </div>
               </>
             ) : tgConfig?.configured ? (
               <div className="auth-muted">{t("login.qrLoading")}</div>
