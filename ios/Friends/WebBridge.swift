@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import WebKit
 
 @MainActor
@@ -23,6 +24,7 @@ final class FriendsWebBridge: ObservableObject {
 
     /// JS timers pause while Telegram is open — kick auth poll when app is foregrounded.
     func resumeAuthPoll() {
+        syncSafeAreaInsets()
         webView?.evaluateJavaScript(
             """
             try {
@@ -35,6 +37,36 @@ final class FriendsWebBridge: ObservableObject {
             """,
             completionHandler: nil
         )
+    }
+
+    /// Push Dynamic Island / home-indicator insets into CSS (WKWebView env() can be 0).
+    func syncSafeAreaInsets() {
+        guard let webView else { return }
+        var insets = webView.safeAreaInsets
+        if insets.top < 1, insets.bottom < 1 {
+            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                insets = scene.keyWindow?.safeAreaInsets
+                    ?? scene.windows.first?.safeAreaInsets
+                    ?? insets
+            }
+        }
+        // iPhone 17 Pro fallbacks if insets still unavailable (Dynamic Island + home bar)
+        let top = insets.top > 0 ? insets.top : 59
+        let bottom = insets.bottom > 0 ? insets.bottom : 34
+        let left = insets.left
+        let right = insets.right
+        let js = """
+        (function(){
+          var r = document.documentElement;
+          r.style.setProperty('--sat', '\(top)px');
+          r.style.setProperty('--sab', '\(bottom)px');
+          r.style.setProperty('--sal', '\(left)px');
+          r.style.setProperty('--sar', '\(right)px');
+          r.classList.add('is-native-ios');
+          r.dataset.device = 'iphone-pro';
+        })();
+        """
+        webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
     func handleIncomingURL(_ url: URL) {

@@ -35,8 +35,16 @@ private struct FriendsWebContainer: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let userContent = WKUserContentController()
         userContent.add(context.coordinator, name: "friends")
+        // iPhone 17 Pro defaults until real safeAreaInsets arrive
         let boot = WKUserScript(
-            source: "window.__FRIENDS_NATIVE__=true;",
+            source: """
+            window.__FRIENDS_NATIVE__=true;
+            document.documentElement.classList.add('is-native-ios');
+            document.documentElement.style.setProperty('--sat','59px');
+            document.documentElement.style.setProperty('--sab','34px');
+            document.documentElement.style.setProperty('--sal','0px');
+            document.documentElement.style.setProperty('--sar','0px');
+            """,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
         )
@@ -47,6 +55,9 @@ private struct FriendsWebContainer: UIViewRepresentable {
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         config.defaultWebpagePreferences.allowsContentJavaScript = true
+        if #available(iOS 15.0, *) {
+            config.preferences.isElementFullscreenEnabled = true
+        }
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
@@ -56,12 +67,25 @@ private struct FriendsWebContainer: UIViewRepresentable {
         webView.backgroundColor = .black
         webView.scrollView.backgroundColor = .black
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.alwaysBounceVertical = true
+        webView.scrollView.contentInset = .zero
+        webView.scrollView.scrollIndicatorInsets = .zero
+        if #available(iOS 16.4, *) {
+            webView.isInspectable = true
+        }
         bridge.attach(webView)
         webView.load(URLRequest(url: bridge.homeURL))
+        DispatchQueue.main.async {
+            bridge.syncSafeAreaInsets()
+        }
         return webView
     }
 
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    func updateUIView(_ uiView: WKWebView, context: Context) {
+        DispatchQueue.main.async {
+            bridge.syncSafeAreaInsets()
+        }
+    }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         let bridge: FriendsWebBridge
@@ -84,6 +108,10 @@ private struct FriendsWebContainer: UIViewRepresentable {
             if type == "openTelegram" || type == "openExternal" {
                 UIApplication.shared.open(url, options: [:], completionHandler: nil)
             }
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            bridge.syncSafeAreaInsets()
         }
 
         func webView(

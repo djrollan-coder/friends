@@ -2,9 +2,14 @@
 
 .auth-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid !important;
   place-items: center;
-  padding: 24px;
+  padding:
+    max(24px, calc(16px + var(--safe-top, env(safe-area-inset-top, 0px))))
+    max(16px, var(--safe-right, env(safe-area-inset-right, 0px)))
+    max(24px, calc(16px + var(--safe-bottom, env(safe-area-inset-bottom, 0px))))
+    max(16px, var(--safe-left, env(safe-area-inset-left, 0px)));
   background:
     radial-gradient(1000px 520px at 18% 10%, rgba(196, 120, 74, 0.22), transparent 55%),
     radial-gradient(800px 420px at 85% 20%, rgba(255, 255, 255, 0.07), transparent 50%),
@@ -20,6 +25,32 @@
   border-radius: 20px;
   padding: 22px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  max-height: calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 32px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 430px) {
+  .auth-card {
+    border-radius: 22px;
+    padding: 20px 18px;
+  }
+
+  .auth-field input,
+  .auth-tabs button {
+    font-size: 16px;
+  }
+
+  .auth-qr-box {
+    min-height: 220px;
+    padding: 12px;
+  }
+
+  .auth-qr-img {
+    width: min(220px, 70vw);
+    height: auto;
+    aspect-ratio: 1;
+  }
 }
 
 .auth-brand {
