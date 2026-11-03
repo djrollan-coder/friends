@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import UIKit
 import WebKit
 
@@ -25,10 +26,16 @@ final class FriendsWebBridge: ObservableObject {
         webView.load(URLRequest(url: url))
     }
 
-    func updateWindowSafeArea(_ insets: UIEdgeInsets) {
+    func updateWindowSafeArea(_ insets: EdgeInsets) {
+        let ui = UIEdgeInsets(
+            top: insets.top,
+            left: insets.leading,
+            bottom: insets.bottom,
+            right: insets.trailing
+        )
         // Ignore zeroed insets from ignoresSafeArea layouts.
-        if insets.top > 1 || insets.bottom > 1 {
-            windowSafeArea = insets
+        if ui.top > 1 || ui.bottom > 1 {
+            windowSafeArea = ui
         }
         syncSafeAreaInsets()
     }
