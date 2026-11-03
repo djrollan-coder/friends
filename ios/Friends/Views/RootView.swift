@@ -1,135 +1,139 @@
 import SwiftUI
+import WebKit
 
 struct RootView: View {
-    @State private var isLoggedIn = false
-    @State private var tab: AppTab = .page
-    @State private var posts = MockData.initialPosts
-    @State private var search = ""
+    @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var bridge = FriendsWebBridge.shared
 
     var body: some View {
-        Group {
-            if isLoggedIn {
-                mainApp
-            } else {
-                LoginView { _ in
-                    isLoggedIn = true
+        FriendsWebContainer()
+            .ignoresSafeArea()
+            .background(Color.black)
+            .onOpenURL { url in
+                bridge.handleIncomingURL(url)
+            }
+            .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                if let url = activity.webpageURL {
+                    bridge.handleIncomingURL(url)
                 }
             }
-        }
-    }
-
-    private var mainApp: some View {
-        VStack(spacing: 0) {
-            header
-
-            TabView(selection: $tab) {
-                MyPageView(posts: $posts)
-                    .tag(AppTab.page)
-
-                FeedView(posts: posts)
-                    .tag(AppTab.feed)
-
-                FriendsListView()
-                    .tag(AppTab.friends)
-
-                MessagesView()
-                    .tag(AppTab.messages)
-
-                MoreView(onLogout: { isLoggedIn = false })
-                    .tag(AppTab.more)
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-
-            tabBar
-        }
-        .background(FriendsTheme.bg.ignoresSafeArea())
-    }
-
-    private var header: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 8) {
-                Text("F")
-                    .font(.system(size: 13, weight: .heavy))
-                        .foregroundStyle(.white)
-                        .frame(width: 26, height: 26)
-                        .background(
-                        LinearGradient(
-                            colors: [Color(red: 0.83, green: 0.54, blue: 0.35), FriendsTheme.accent],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-
-                Text("Friends")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 13))
-                    .foregroundStyle(FriendsTheme.muted)
-                TextField("Поиск", text: $search)
-                    .foregroundStyle(FriendsTheme.text)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(FriendsTheme.panelAlt)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(FriendsTheme.border, lineWidth: 1)
-            )
-
-            if tab == .messages {
-                BadgeView(value: 1)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(FriendsTheme.border)
-                .frame(height: 1)
-        }
-    }
-
-    private var tabBar: some View {
-        HStack {
-            ForEach(AppTab.allCases) { item in
-                Button {
-                    tab = item
-                } label: {
-                    VStack(spacing: 4) {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: item.systemImage)
-                                .font(.system(size: 18, weight: .semibold))
-
-                            if item == .messages {
-                                Circle()
-                                    .fill(FriendsTheme.accent)
-                                    .frame(width: 7, height: 7)
-                                    .offset(x: 6, y: -2)
-                            }
-                        }
-                        Text(item.rawValue)
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .foregroundStyle(tab == item ? FriendsTheme.accent : FriendsTheme.muted)
-                    .frame(maxWidth: .infinity)
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    // Keep session; no forced reload.
                 }
-                .buttonStyle(.plain)
+            }
+    }
+}
+
+private struct FriendsWebContainer: UIViewRepresentable {
+    @ObservedObject var bridge = FriendsWebBridge.shared
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(bridge: bridge)
+    }
+
+    func makeUIView(context: Context) -> WKWebView {
+        let userContent = WKUserContentController()
+        userContent.add(context.coordinator, name: "friends")
+        let boot = WKUserScript(
+            source: "window.__FRIENDS_NATIVE__=true;",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
+        userContent.addUserScript(boot)
+
+        let config = WKWebViewConfiguration()
+        config.userContentController = userContent
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+        config.defaultWebpagePreferences.allowsContentJavaScript = true
+
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
+        webView.allowsBackForwardNavigationGestures = true
+        webView.isOpaque = false
+        webView.backgroundColor = .black
+        webView.scrollView.backgroundColor = .black
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        bridge.attach(webView)
+        webView.load(URLRequest(url: bridge.homeURL))
+        return webView
+    }
+
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
+
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+        let bridge: FriendsWebBridge
+
+        init(bridge: FriendsWebBridge) {
+            self.bridge = bridge
+        }
+
+        func userContentController(
+            _ userContentController: WKUserContentController,
+            didReceive message: WKScriptMessage
+        ) {
+            guard message.name == "friends" else { return }
+            guard let body = message.body as? [String: Any],
+                  let type = body["type"] as? String,
+                  let raw = body["url"] as? String,
+                  let url = URL(string: raw)
+            else { return }
+
+            if type == "openTelegram" || type == "openExternal" {
+                UIApplication.shared.open(url, options: [:], completionHandler: nil)
             }
         }
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        .background(FriendsTheme.panelAlt.opacity(0.96))
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(FriendsTheme.border)
-                .frame(height: 1)
+
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+        ) {
+            guard let url = navigationAction.request.url else {
+                decisionHandler(.allow)
+                return
+            }
+
+            if bridge.isAppHost(url) || url.scheme == "about" || url.scheme == "blob" {
+                decisionHandler(.allow)
+                return
+            }
+
+            // Keep Telegram OAuth pages inside the webview when possible.
+            if let host = url.host?.lowercased(), host == "oauth.telegram.org" {
+                decisionHandler(.allow)
+                return
+            }
+
+            // t.me / telegram links → open Telegram app, stay in Friends webview.
+            if bridge.isTelegramHost(url) {
+                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                decisionHandler(.cancel)
+                return
+            }
+
+            UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            decisionHandler(.cancel)
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            createWebViewWith configuration: WKWebViewConfiguration,
+            for navigationAction: WKNavigationAction,
+            windowFeatures: WKWindowFeatures
+        ) -> WKWebView? {
+            if let url = navigationAction.request.url {
+                if bridge.isAppHost(url) || url.host?.lowercased() == "oauth.telegram.org" {
+                    webView.load(URLRequest(url: url))
+                } else if bridge.isTelegramHost(url) {
+                    UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                } else if let url {
+                    UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                }
+            }
+            return nil
         }
     }
 }

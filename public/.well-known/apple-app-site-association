@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "6U7N8MK2R5.com.friends.app",
+        "paths": ["*", "/login/*", "/login/telegram", "/login/telegram/*"]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["6U7N8MK2R5.com.friends.app"]
+  }
+}

@@ -87,12 +87,13 @@ export async function POST(request: Request) {
     first_name: from.first_name,
     last_name: from.last_name,
     username: from.username,
+    photo_url: photoUrl,
     exp: 0,
   });
 
   await tgApi("sendMessage", {
     chat_id: msg.chat.id,
-    text: `Привет, ${preview.name}!\n\nНажми кнопку ниже, чтобы войти в Friends.`,
+    text: `Привет, ${preview.name}!\n\nНажми кнопку ниже — откроется приложение Friends (не Safari).\nЕсли спросит браузер, выбери «Открыть в Friends».`,
     reply_markup: {
       inline_keyboard: [
         [{ text: "Открыть Friends и войти", url: loginUrl }],

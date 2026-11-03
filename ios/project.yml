@@ -19,6 +19,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.friends.app
+        DEVELOPMENT_TEAM: 6U7N8MK2R5
+        CODE_SIGN_STYLE: Automatic
         INFOPLIST_KEY_CFBundleDisplayName: Friends
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
@@ -26,9 +28,19 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: YES
+    entitlements:
+      path: Friends/Friends.entitlements
+      properties:
+        com.apple.developer.associated-domains:
+          - applinks:friends-two-amber.vercel.app
     info:
       path: Friends/Info.plist
       properties:
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UIRequiresFullScreen: true
+        CFBundleURLTypes:
+          - CFBundleURLName: com.friends.app
+            CFBundleURLSchemes:
+              - friends
+        CFBundleDisplayName: Friends

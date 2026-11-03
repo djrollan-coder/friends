@@ -141,6 +141,16 @@ export function LoginScreen() {
       return;
     }
     setTgBusy(true);
+    // Native iOS shell: open Telegram externally, keep Friends WebView on /login.
+    const native = (window as Window & {
+      __FRIENDS_NATIVE__?: boolean;
+      webkit?: { messageHandlers?: { friends?: { postMessage: (v: unknown) => void } } };
+    }).webkit?.messageHandlers?.friends;
+    if ((window as Window & { __FRIENDS_NATIVE__?: boolean }).__FRIENDS_NATIVE__ && native) {
+      native.postMessage({ type: "openTelegram", url: link });
+      setTgBusy(false);
+      return;
+    }
     window.location.href = link;
   }
 
