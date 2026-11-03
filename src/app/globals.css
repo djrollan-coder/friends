@@ -1610,29 +1610,63 @@ html.is-native-ios.is-native-safe-inset .vk-page.has-mobile-nav {
 .friends-swipe-delete {
   position: absolute;
   inset: 0 0 0 auto;
-  width: 88px;
+  width: 84px;
   border: 0;
-  background: #c94b4b;
+  margin: 8px 8px 8px 0;
+  border-radius: 12px;
+  background: rgba(180, 70, 70, 0.92);
   color: #fff;
   font: inherit;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 650;
   cursor: pointer;
-  display: grid;
+  display: none;
   place-items: center;
+}
+
+.friends-swipe.is-swipeable .friends-swipe-delete {
+  display: grid;
 }
 
 .friends-swipe-front {
   position: relative;
   z-index: 1;
-  background: var(--vk-bg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #121416;
   transition: transform 0.18s ease;
   touch-action: pan-y;
   will-change: transform;
 }
 
-.friends-swipe-front:active {
+.friends-swipe.is-swipeable .friends-swipe-front:active {
   transition: none;
+}
+
+.friends-quiet-remove {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.friends-swipe:hover .friends-quiet-remove,
+.friends-swipe:focus-within .friends-quiet-remove {
+  color: #9a9b9f;
+}
+
+.friends-quiet-remove:hover {
+  color: #e07a7a !important;
+  background: rgba(224, 122, 122, 0.1);
 }
 
 .friends-row {
@@ -1640,6 +1674,8 @@ html.is-native-ios.is-native-safe-inset .vk-page.has-mobile-nav {
   -webkit-user-select: none;
   border-bottom: 0 !important;
   background: transparent !important;
+  flex: 1;
+  min-width: 0;
 }
 
 .friends-row-main {
@@ -1663,6 +1699,10 @@ html.is-native-ios.is-native-safe-inset .vk-page.has-mobile-nav {
     padding: 12px 4px;
   }
 
+  .friends-quiet-remove {
+    display: none;
+  }
+
   .friends-page .vk-page-title {
     padding: 0 4px;
   }
@@ -1672,13 +1712,6 @@ html.is-native-ios.is-native-safe-inset .vk-page.has-mobile-nav {
   .friends-page .settings-search {
     margin-left: 4px;
     margin-right: 4px;
-  }
-}
-
-@media (min-width: 901px) {
-  /* Desktop: no swipe tray needed — show delete via long context? keep swipe too */
-  .friends-swipe-front {
-    background: transparent;
   }
 }
 
