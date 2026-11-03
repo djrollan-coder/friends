@@ -2,75 +2,67 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { friends } from "@/data/mock";
-import { getSessionUser } from "@/lib/sessionUser";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   clearChatMessages,
   deleteChat,
-  findChat,
-  loadChats,
+  fetchChat,
   peerOf,
   sendChatMessage,
   type ChatThread,
 } from "@/lib/chatStore";
 import { MessageComposer } from "@/components/MessageComposer";
 import { VideoCall, type CallParticipant } from "@/components/VideoCall";
+import { useAuth } from "@/components/AuthProvider";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { useLive } from "@/lib/live";
 
 export default function MessageThreadPage() {
   const t = useT();
   const router = useRouter();
+  const { user } = useAuth();
   const params = useParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const [thread, setThread] = useState<ChatThread | null | undefined>(undefined);
   const [inCall, setInCall] = useState(false);
 
-  useEffect(() => {
-    loadChats();
-    setThread(findChat(id) ?? null);
+  const load = useCallback(async () => {
+    const chat = await fetchChat(id);
+    setThread(chat);
   }, [id]);
 
   useEffect(() => {
-    function onChatUpdated(e: Event) {
-      const detail = (e as CustomEvent<{ threadIds?: string[] }>).detail;
-      if (!id) return;
-      if (detail?.threadIds && !detail.threadIds.includes(id)) return;
-      setThread(findChat(id) ?? null);
-    }
-    window.addEventListener("friends-chat-updated", onChatUpdated);
-    window.addEventListener("friends-scheduled-changed", onChatUpdated);
-    const poll = window.setInterval(() => {
-      setThread(findChat(id) ?? null);
-    }, 3000);
-    return () => {
-      window.removeEventListener("friends-chat-updated", onChatUpdated);
-      window.removeEventListener("friends-scheduled-changed", onChatUpdated);
-      window.clearInterval(poll);
-    };
-  }, [id]);
+    void load();
+  }, [load]);
+
+  useLive(["message"], (event) => {
+    if (event.read) return;
+    if (event.chatId && event.chatId !== id) return;
+    void load();
+  });
 
   const peer = useMemo(() => (thread ? peerOf(thread) : undefined), [thread]);
 
   const callPeople: CallParticipant[] = useMemo(() => {
     if (!thread) return [];
+    const members = thread.members ?? [];
     return thread.memberIds.map((mid) => {
-      if (mid === getSessionUser().id) {
+      if (mid === user?.id) {
         return {
-          id: getSessionUser().id,
-          name: getSessionUser().name,
-          avatar: getSessionUser().avatar,
+          id: mid,
+          name: user?.name ?? t("call.self"),
+          avatar: user?.avatar ?? "F",
           isSelf: true,
         };
       }
-      const user = friends.find((f) => f.id === mid);
+      const found = members.find((m) => m.id === mid);
       return {
         id: mid,
-        name: user?.name ?? t("call.participant"),
-        avatar: user?.avatar ?? "??",
+        name: found?.name ?? t("call.participant"),
+        avatar: found?.avatar ?? "??",
       };
     });
-  }, [thread, t]);
+  }, [thread, user?.id, user?.name, user?.avatar, t]);
 
   if (thread === undefined) {
     return (
@@ -94,6 +86,11 @@ export default function MessageThreadPage() {
     );
   }
 
+  const memberName = (mid: string) => {
+    if (mid === user?.id) return user?.name ?? t("call.self");
+    return thread.members?.find((m) => m.id === mid)?.name ?? mid;
+  };
+
   return (
     <div className="vk-card vk-main-pad">
       <div className="messages-head">
@@ -105,10 +102,9 @@ export default function MessageThreadPage() {
           <button
             type="button"
             className="vk-btn ghost"
-            onClick={() => {
+            onClick={async () => {
               if (!window.confirm(t("messages.clearConfirm"))) return;
-              clearChatMessages(thread.id);
-              setThread(findChat(thread.id) ?? null);
+              setThread(await clearChatMessages(thread.id));
             }}
           >
             {t("messages.clear")}
@@ -116,9 +112,9 @@ export default function MessageThreadPage() {
           <button
             type="button"
             className="vk-btn danger"
-            onClick={() => {
+            onClick={async () => {
               if (!window.confirm(t("messages.deleteConfirm"))) return;
-              deleteChat(thread.id);
+              await deleteChat(thread.id);
               router.replace("/messages");
             }}
           >
@@ -131,14 +127,7 @@ export default function MessageThreadPage() {
       </div>
       {thread.type === "group" ? (
         <div className="vk-status-box">
-          {t("messages.members")}{" "}
-          {thread.memberIds
-            .map((mid) =>
-              mid === getSessionUser().id
-                ? getSessionUser().name
-                : friends.find((f) => f.id === mid)?.name ?? mid,
-            )
-            .join(", ")}
+          {t("messages.members")} {thread.memberIds.map(memberName).join(", ")}
         </div>
       ) : null}
 
@@ -152,16 +141,10 @@ export default function MessageThreadPage() {
 
       <div className="vk-list chat-thread">
         {thread.messages.map((msg) => {
-          const mine = msg.authorId === getSessionUser().id;
-          const author =
-            msg.authorId === getSessionUser().id
-              ? getSessionUser()
-              : friends.find((f) => f.id === msg.authorId);
+          const mine = msg.authorId === user?.id;
+          const author = thread.members?.find((m) => m.id === msg.authorId);
           return (
-            <div
-              key={msg.id}
-              className={`vk-list-row${mine ? " message-out" : ""}`}
-            >
+            <div key={msg.id} className={`vk-list-row${mine ? " message-out" : ""}`}>
               {!mine ? <div className="vk-avatar sm">{author?.avatar ?? "??"}</div> : null}
               <div style={mine ? { marginLeft: "auto", textAlign: "right" } : undefined}>
                 {thread.type === "group" && !mine ? (
@@ -180,15 +163,16 @@ export default function MessageThreadPage() {
       <MessageComposer
         threadId={thread.id}
         isDm={thread.type === "dm"}
-        onSend={(text) => {
-          sendChatMessage(thread.id, text);
-          setThread(findChat(thread.id) ?? null);
+        peerId={thread.peer?.id}
+        onSend={async (text) => {
+          const next = await sendChatMessage(thread.id, text);
+          if (next) setThread(next);
         }}
-        onSendSilent={(text) => {
-          sendChatMessage(thread.id, text, { silent: true });
-          setThread(findChat(thread.id) ?? null);
+        onSendSilent={async (text) => {
+          const next = await sendChatMessage(thread.id, text, { silent: true });
+          if (next) setThread(next);
         }}
-        onScheduled={() => setThread(findChat(thread.id) ?? null)}
+        onScheduled={load}
       />
     </div>
   );

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import {
-  authUserFromBotClaims,
-  verifyBotLoginToken,
-} from "@/lib/telegramBotLogin";
+import { verifyBotLoginToken } from "@/lib/telegramBotLogin";
 import { telegramConfigured } from "@/lib/telegramAuth";
+import {
+  createSession,
+  findOrCreateTelegramUser,
+  toAuthUser,
+} from "@/lib/server/auth";
 
 export async function POST(request: Request) {
   if (!telegramConfigured()) {
@@ -20,5 +22,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_token" }, { status: 401 });
   }
 
-  return NextResponse.json({ user: authUserFromBotClaims(claims) });
+  const name = [claims.first_name, claims.last_name].filter(Boolean).join(" ");
+  const row = findOrCreateTelegramUser({
+    id: claims.id,
+    name,
+    username: claims.username,
+    photoUrl: claims.photo_url,
+  });
+  await createSession(row.id, request);
+  return NextResponse.json({ user: toAuthUser(row) });
 }

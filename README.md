@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Friends — приватная соцсеть
 
-## Getting Started
+Next.js 16 + React 19 приложение: лента, профиль, друзья, сообщества, мессенджер,
+фото, видео, музыка, файлы, сторис и уведомления. Данные хранятся на сервере в
+SQLite, поэтому один аккаунт работает на всех устройствах, а сообщения и
+уведомления приходят в реальном времени (SSE).
 
-First, run the development server:
+## Запуск
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev      # http://localhost:3000
+# или
+npm run build && npm run start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Требуется Node.js 24+ (встроенный драйвер `node:sqlite`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+При первом запуске автоматически создаются:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- база `data/friends.db` (SQLite, встроенный драйвер `node:sqlite`);
+- демо-пользователи, посты, сообщества и тестовое содержимое;
+- папка `data/uploads` для загруженных файлов (фото, видео, аудио, документы).
 
-## Learn More
+`data/` не коммитится в git. Каталог можно переопределить переменной
+`FRIENDS_DATA_DIR` (например, на смонтированный диск). Если рабочий каталог
+доступен только для чтения, приложение само переключается на системный temp —
+в этом случае данные не переживают перезапуск.
 
-To learn more about Next.js, take a look at the following resources:
+> **Vercel/serverless:** файловая система инстанса эфемерна. Для постоянного
+> хранения на Vercel нужна внешняя БД (Postgres/KV); текущая реализация
+> рассчитана на локальный запуск, VPS или Docker с постоянным томом.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Аккаунты
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Вход по email + паролю (пароли хешируются scrypt, сессия в httpOnly-cookie).
+- Вход через Telegram (Login Widget и бот, если заданы env-переменные).
+- Вход по QR: телефон подтверждает сессию, десктоп получает cookie.
+- Новому аккаунту автоматически подставляются демо-друзья и контент, чтобы
+  интерфейс не был пустым. Других реальных пользователей можно найти в поиске.
 
-## Deploy on Vercel
+## Переменные окружения
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+См. `.env.example`:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=
+TELEGRAM_BOT_TOKEN=
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=      # Google Drive backup (optional)
+NEXT_PUBLIC_SITE_URL=              # public origin for Telegram deep links
+FRIENDS_DATA_DIR=                  # optional persistent data directory
+```
+
+## Основные API
+
+| Группа | Маршруты |
+| --- | --- |
+| Auth | `/api/auth/{register,login,logout,me,email}`, `/api/auth/telegram/*`, `/api/auth/qr/*` |
+| Лента | `GET/POST /api/feed`, `POST/DELETE /api/posts/[id]`, `GET /api/bookmarks` |
+| Люди | `/api/friends`, `/api/friends/[id]`, `/api/people`, `/api/users/[id]`, `/api/profile`, `/api/search` |
+| Сообщества | `/api/groups`, `/api/groups/[id]` |
+| Чаты | `/api/chats`, `/api/chats/[id]`, `/api/chats/[id]/messages` |
+| Уведомления | `/api/notifications`, `/api/notifications/[id]` |
+| Медиа | `/api/photos`, `/api/albums`, `/api/videos`, `/api/documents`, `/api/stories`, `/api/upload`, `/api/media/[name]` |
+| Разное | `/api/listings`, `/api/settings`, `/api/invites`, `/api/events` (SSE) |
+
+## Проверка
+
+```bash
+npx tsc --noEmit
+npm run lint
+npm run build
+```

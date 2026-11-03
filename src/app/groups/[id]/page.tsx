@@ -2,50 +2,52 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Composer } from "@/components/Composer";
 import { PostCard } from "@/components/PostCard";
-import { getSessionUser } from "@/lib/sessionUser";
-import { getPerson } from "@/lib/friendsStore";
-import {
-  addComment,
-  loadFeed,
-  repost,
-  toggleBookmark,
-  toggleLike,
-  type FeedPost,
-} from "@/lib/feedStore";
-import {
-  getGroup,
-  joinGroup,
-  leaveGroup,
-  loadGroups,
-  postToGroup,
-  updateGroupPrivacy,
-  type Community,
-} from "@/lib/groupsStore";
+import { useAuth } from "@/components/AuthProvider";
+import { createPost, postAction, type FeedPost } from "@/lib/feedStore";
+import { fetchPeople, getPerson } from "@/lib/friendsStore";
+import { fetchGroup, groupAction, type Community } from "@/lib/groupsStore";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { useLive } from "@/lib/live";
 
 export default function GroupPage() {
   const t = useT();
   const params = useParams<{ id: string }>();
+  const { user } = useAuth();
   const [group, setGroup] = useState<Community | null>(null);
   const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [missing, setMissing] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const data = await fetchGroup(params.id);
+    if (!data) {
+      setMissing(true);
+      return;
+    }
+    setMissing(false);
+    setGroup(data.group);
+    setPosts(data.posts);
+  }, [params.id]);
 
   useEffect(() => {
-    setGroup(getGroup(params.id) ?? null);
-    setPosts(loadFeed().filter((p) => p.groupId === params.id));
-  }, [params.id]);
+    void load();
+    void fetchPeople();
+  }, [load]);
+
+  useLive(["group", "post", "post-updated"], () => void load());
 
   const members = useMemo(
     () =>
       (group?.memberIds ?? [])
-        .map((id) => (id === getSessionUser().id ? getSessionUser() : getPerson(id)))
+        .map((id) => getPerson(id))
         .filter(Boolean),
     [group],
   );
 
-  if (!group) {
+  if (missing) {
     return (
       <div className="vk-card vk-main-pad">
         <Link href="/groups">{t("groups.title")}</Link>
@@ -54,8 +56,30 @@ export default function GroupPage() {
     );
   }
 
-  const joined = group.memberIds.includes(getSessionUser().id);
-  const isOwner = group.ownerId === getSessionUser().id;
+  if (!group) {
+    return <div className="vk-card vk-main-pad vk-empty">{t("common.loading")}</div>;
+  }
+
+  const joined = Boolean(user?.id && group.memberIds.includes(user.id));
+  const isOwner = group.ownerId === user?.id;
+
+  async function act(action: "join" | "leave" | "privacy") {
+    setBusy(true);
+    try {
+      await groupAction(
+        group!.id,
+        action,
+        action === "privacy"
+          ? group!.privacy === "public"
+            ? "private"
+            : "public"
+          : undefined,
+      );
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="sortable-stack">
@@ -74,21 +98,13 @@ export default function GroupPage() {
             <button
               type="button"
               className="vk-btn"
-              onClick={() => {
-                joinGroup(params.id);
-                setGroup(getGroup(params.id) ?? null);
-              }}
+              disabled={busy}
+              onClick={() => void act("join")}
             >
               {t("groups.join")}
             </button>
           ) : !isOwner ? (
-            <button
-              type="button"
-              onClick={() => {
-                leaveGroup(params.id);
-                setGroup(getGroup(params.id) ?? null);
-              }}
-            >
+            <button type="button" disabled={busy} onClick={() => void act("leave")}>
               {t("groups.leave")}
             </button>
           ) : null}
@@ -97,13 +113,8 @@ export default function GroupPage() {
             <button
               type="button"
               className="vk-btn"
-              onClick={() => {
-                updateGroupPrivacy(
-                  group.id,
-                  group.privacy === "public" ? "private" : "public",
-                );
-                setGroup(getGroup(group.id) ?? null);
-              }}
+              disabled={busy}
+              onClick={() => void act("privacy")}
             >
               {group.privacy === "public" ? t("groups.makePrivate") : t("groups.makePublic")}
             </button>
@@ -125,11 +136,9 @@ export default function GroupPage() {
           <div style={{ marginTop: 14 }}>
             <Composer
               title={t("groups.postTitle")}
-              onSubmit={({ text, image }) => {
-                postToGroup(group.id, text, image);
-                setPosts(loadFeed().filter((p) => p.groupId === group.id));
-                setGroup(getGroup(group.id) ?? null);
-                loadGroups();
+              onSubmit={async ({ text, image, video }) => {
+                await createPost({ text, image, video, groupId: group.id });
+                await load();
               }}
             />
           </div>
@@ -140,14 +149,22 @@ export default function GroupPage() {
         <PostCard
           key={post.id}
           post={post}
-          onLike={(id) => setPosts(toggleLike(id).filter((p) => p.groupId === group.id))}
-          onComment={(id, text) =>
-            setPosts(addComment(id, text).filter((p) => p.groupId === group.id))
-          }
-          onRepost={(id) => setPosts(repost(id).filter((p) => p.groupId === group.id))}
-          onBookmark={(id) =>
-            setPosts(toggleBookmark(id).feed.filter((p) => p.groupId === group.id))
-          }
+          onLike={async (id) => {
+            await postAction(id, "like");
+            await load();
+          }}
+          onComment={async (id, text) => {
+            await postAction(id, "comment", text);
+            await load();
+          }}
+          onRepost={async (id) => {
+            await postAction(id, "repost");
+            await load();
+          }}
+          onBookmark={async (id) => {
+            await postAction(id, "bookmark");
+            await load();
+          }}
         />
       ))}
     </div>

@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
-import { findAccount, registerAccount } from "@/lib/accounts";
-import { consumeInvite, validateInvite } from "@/lib/circleStore";
 import { useT } from "@/lib/i18n/I18nProvider";
 import "@/app/login/login.css";
 
@@ -64,7 +62,6 @@ export function LoginScreen() {
   const [botLogin, setBotLogin] = useState<BotLoginUi | null>(null);
   const [tgError, setTgError] = useState("");
   const [name, setName] = useState("");
-  const [invite, setInvite] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
@@ -206,13 +203,13 @@ export function LoginScreen() {
         const data = await res.json();
         if (data.status === "confirmed" && data.user) {
           setQrStatus("confirmed");
-          login({
-            id: data.user.id,
-            name: data.user.name,
-            username: data.user.username,
-            avatar: data.user.avatar,
-            method: "qr",
-          });
+          const claim = await fetch(`/api/auth/qr/${qr.token}/claim`, { method: "POST" });
+          const claimed = await claim.json();
+          if (!claim.ok || !claimed.user) {
+            setQrStatus("error");
+            return;
+          }
+          login({ ...claimed.user, method: "qr" });
         } else if (data.status === "expired") {
           setQrStatus("expired");
         }
@@ -223,20 +220,6 @@ export function LoginScreen() {
 
     return () => clearInterval(timer);
   }, [tab, qr, qrStatus, login]);
-
-  async function loginTelegramDemo() {
-    setTgBusy(true);
-    setTgError("");
-    await new Promise((r) => setTimeout(r, 400));
-    login({
-      id: "tg-42",
-      name: "Роман Моторный",
-      username: "roman",
-      avatar: "РМ",
-      method: "telegram",
-    });
-    setTgBusy(false);
-  }
 
   async function openTelegramBot() {
     setTgError("");
@@ -276,56 +259,22 @@ export function LoginScreen() {
     setEmailError("");
     setEmailBusy(true);
     try {
-      if (mode === "register") {
-        const inviteCheck = validateInvite(invite);
-        if (!inviteCheck.ok) {
-          if (inviteCheck.error === "empty") setEmailError(t("login.inviteNeeded"));
-          else if (inviteCheck.error === "exhausted") setEmailError(t("login.inviteExhausted"));
-          else setEmailError(t("login.inviteInvalid"));
-          return;
-        }
-        const result = registerAccount({ name, email, password });
-        if ("error" in result) {
-          if (result.error === "invalid_email") setEmailError(t("login.invalidEmail"));
-          else if (result.error === "weak_password") setEmailError(t("login.weakPassword"));
-          else if (result.error === "weak_name") setEmailError(t("login.weakName"));
-          else if (result.error === "exists") setEmailError(t("login.exists"));
-          else setEmailError(t("login.registerFail"));
-          return;
-        }
-        consumeInvite(invite);
-        login({
-          id: result.id,
-          name: result.name,
-          email: result.email,
-          avatar: result.avatar,
-          method: "email",
-        });
-        return;
-      }
-
-      const local = findAccount(email, password);
-      if (local) {
-        login({
-          id: local.id,
-          name: local.name,
-          email: local.email,
-          avatar: local.avatar,
-          method: "email",
-        });
-        return;
-      }
-
-      const res = await fetch("/api/auth/email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      const res = await fetch(
+        mode === "register" ? "/api/auth/register" : "/api/auth/login",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, password }),
+        },
+      );
       const data = await res.json();
       if (!res.ok) {
         if (data.error === "invalid_email") setEmailError(t("login.invalidEmail"));
         else if (data.error === "weak_password") setEmailError(t("login.weakPassword"));
-        else setEmailError(t("login.loginFail"));
+        else if (data.error === "weak_name") setEmailError(t("login.weakName"));
+        else if (data.error === "exists") setEmailError(t("login.exists"));
+        else if (data.error === "invalid_credentials") setEmailError(t("login.loginFail"));
+        else setEmailError(mode === "register" ? t("login.registerFail") : t("login.loginFail"));
         return;
       }
       login(data.user);
@@ -382,17 +331,6 @@ export function LoginScreen() {
             {mode === "register" ? (
               <>
                 <label className="auth-field">
-                  <span>{t("login.inviteCode")}</span>
-                  <input
-                    type="text"
-                    autoComplete="off"
-                    placeholder="BLIZKIE"
-                    value={invite}
-                    onChange={(e) => setInvite(e.target.value)}
-                    required
-                  />
-                </label>
-                <label className="auth-field">
                   <span>{t("login.nameLabel")}</span>
                   <input
                     type="text"
@@ -425,7 +363,7 @@ export function LoginScreen() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={4}
+                minLength={6}
               />
             </label>
             {emailError ? <div className="auth-error">{emailError}</div> : null}
@@ -491,17 +429,7 @@ export function LoginScreen() {
             ) : tgConfig?.configured ? (
               <div className="auth-muted">{t("login.qrLoading")}</div>
             ) : (
-              <button
-                type="button"
-                className="auth-telegram-btn"
-                onClick={loginTelegramDemo}
-                disabled={tgBusy}
-              >
-                <span className="auth-tg-icon" aria-hidden>
-                  ▶
-                </span>
-                {tgBusy ? t("login.signingIn") : t("login.telegramBtn")}
-              </button>
+              <div className="auth-muted">{t("login.telegramSetup")}</div>
             )}
             {tgError ? <div className="auth-error">{tgError}</div> : null}
             {!tgConfig?.configured ? (

@@ -1,15 +1,25 @@
-import { loadAuth } from "@/lib/auth";
 import { currentUser as fallbackUser, type User } from "@/data/mock";
+import type { AuthUser } from "@/lib/auth";
 
-/** Logged-in person for UI/stores (falls back to mock only if logged out). */
+let cached: AuthUser | null = null;
+
+/** AuthProvider keeps this cache in sync with the server session. */
+export function setSessionAuthUser(user: AuthUser | null) {
+  cached = user;
+}
+
+export function getSessionAuthUser() {
+  return cached;
+}
+
+/** Logged-in person for UI/stores (falls back to mock only before hydration). */
 export function getSessionUser(): User {
-  const auth = loadAuth();
-  if (!auth) return fallbackUser;
+  if (!cached) return fallbackUser;
   return {
-    id: auth.id,
-    name: auth.name,
-    avatar: auth.avatar,
-    photo: auth.photoUrl,
+    id: cached.id,
+    name: cached.name,
+    avatar: cached.avatar,
+    photo: cached.photoUrl,
     online: true,
   };
 }

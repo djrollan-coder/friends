@@ -6,18 +6,27 @@ import { processDueScheduled } from "@/lib/scheduledMessages";
 /** Quiet background sender for timer / when-online messages */
 export function ScheduledSendRunner() {
   useEffect(() => {
-    function tick() {
-      const { sent } = processDueScheduled();
-      if (sent.length) {
-        window.dispatchEvent(
-          new CustomEvent("friends-chat-updated", {
-            detail: { threadIds: sent.map((s) => s.threadId) },
-          }),
-        );
+    let busy = false;
+
+    async function tick() {
+      if (busy) return;
+      busy = true;
+      try {
+        const { sent } = await processDueScheduled();
+        if (sent.length) {
+          window.dispatchEvent(
+            new CustomEvent("friends-chat-updated", {
+              detail: { threadIds: sent.map((s) => s.threadId) },
+            }),
+          );
+        }
+      } finally {
+        busy = false;
       }
     }
-    tick();
-    const id = window.setInterval(tick, 2000);
+
+    void tick();
+    const id = window.setInterval(() => void tick(), 2000);
     window.addEventListener("friends-presence-changed", tick);
     window.addEventListener("friends-scheduled-changed", tick);
     return () => {

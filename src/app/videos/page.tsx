@@ -2,13 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n, useT } from "@/lib/i18n/I18nProvider";
-import {
-  addVideo,
-  bumpViews,
-  loadVideos,
-  removeVideo,
-  type VideoItem,
-} from "@/lib/videosStore";
+import { api, uploadFile } from "@/lib/api";
+
+type VideoItem = {
+  id: string;
+  title: string;
+  description: string;
+  createdAt: string;
+  createdLabel: string;
+  duration: string;
+  views: number;
+  tone: string;
+  cover: string;
+  src?: string;
+};
 
 type SortMode = "newest" | "oldest" | "name" | "views";
 type ViewMode = "cards" | "list";
@@ -26,15 +33,6 @@ function sortVideos(list: VideoItem[], mode: SortMode, locale: string) {
     default:
       return next.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
-}
-
-function readFileAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("read_fail"));
-    reader.readAsDataURL(file);
-  });
 }
 
 function probeDuration(src: string) {
@@ -70,7 +68,14 @@ export default function VideosPage() {
   const [playingId, setPlayingId] = useState<string | null>(null);
 
   useEffect(() => {
-    setVideos(loadVideos());
+    void (async () => {
+      try {
+        const data = await api<{ videos: VideoItem[] }>("/api/videos");
+        setVideos(data.videos);
+      } catch {
+        /* offline */
+      }
+    })();
   }, []);
 
   const filtered = useMemo(() => {
@@ -100,24 +105,24 @@ export default function VideosPage() {
           setError(t("videos.errorFile"));
           return;
         }
-        src =
-          file.size <= 3_500_000
-            ? await readFileAsDataUrl(file)
-            : URL.createObjectURL(file);
+        const uploaded = await uploadFile(file);
+        src = uploaded.url;
         duration = await probeDuration(src);
       } else if (url.trim()) {
         src = url.trim();
         duration = await probeDuration(src).catch(() => "0:00");
       }
 
-      setVideos(
-        addVideo({
+      const data = await api<{ videos: VideoItem[] }>("/api/videos", {
+        method: "POST",
+        body: JSON.stringify({
           title: title.trim() || file?.name || t("videos.newVideo"),
           description,
           src,
           duration,
         }),
-      );
+      });
+      setVideos(data.videos);
       setOpenAdd(false);
       setTitle("");
       setDescription("");
@@ -245,7 +250,13 @@ export default function VideosPage() {
                       controls
                       autoPlay
                       playsInline
-                      onPlay={() => setVideos(bumpViews(video.id))}
+                      onPlay={async () => {
+                        const data = await api<{ videos: VideoItem[] }>(`/api/videos/${video.id}`, {
+                          method: "POST",
+                          body: JSON.stringify({ action: "view" }),
+                        });
+                        setVideos(data.videos);
+                      }}
                     />
                   ) : (
                     <>
@@ -286,9 +297,12 @@ export default function VideosPage() {
                     <button
                       type="button"
                       className="videos-action"
-                      onClick={() => {
+                      onClick={async () => {
                         if (playingId === video.id) setPlayingId(null);
-                        setVideos(removeVideo(video.id));
+                        const data = await api<{ videos: VideoItem[] }>(`/api/videos/${video.id}`, {
+                          method: "DELETE",
+                        });
+                        setVideos(data.videos);
                       }}
                     >
                       {t("common.delete")}

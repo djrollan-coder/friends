@@ -1,51 +1,44 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { searchPeople } from "@/lib/friendsStore";
-import { loadFeed } from "@/lib/feedStore";
-import { loadGroups } from "@/lib/groupsStore";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { PostCard } from "@/components/PostCard";
-import {
-  addComment,
-  repost,
-  toggleBookmark,
-  toggleLike,
-} from "@/lib/feedStore";
+import { api } from "@/lib/api";
+import type { Community, FeedPost, Person } from "@/lib/dto";
+import { postAction } from "@/lib/feedStore";
 import { useT } from "@/lib/i18n/I18nProvider";
+
+type SearchData = {
+  people: Person[];
+  groups: Community[];
+  posts: FeedPost[];
+};
 
 function SearchInner() {
   const t = useT();
+  const router = useRouter();
   const params = useSearchParams();
   const q = params.get("q") ?? "";
   const [query, setQuery] = useState(q);
-  const [feed, setFeed] = useState(() => loadFeed());
+  const [data, setData] = useState<SearchData>({ people: [], groups: [], posts: [] });
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async (needle: string) => {
+    setLoading(true);
+    try {
+      const result = await api<SearchData>(`/api/search?q=${encodeURIComponent(needle)}`);
+      setData(result);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     setQuery(q);
-    setFeed(loadFeed());
-  }, [q]);
-
-  const people = useMemo(() => searchPeople(query), [query]);
-  const groups = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return loadGroups().filter(
-      (g) =>
-        !needle ||
-        g.name.toLowerCase().includes(needle) ||
-        g.desc.toLowerCase().includes(needle),
-    );
-  }, [query]);
-  const posts = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return feed.filter(
-      (p) =>
-        !needle ||
-        p.text.toLowerCase().includes(needle) ||
-        p.author.name.toLowerCase().includes(needle),
-    );
-  }, [feed, query]);
+    const timer = window.setTimeout(() => void load(q), 180);
+    return () => window.clearTimeout(timer);
+  }, [q, load]);
 
   return (
     <div className="sortable-stack">
@@ -55,9 +48,7 @@ function SearchInner() {
           className="settings-search"
           onSubmit={(e) => {
             e.preventDefault();
-            const next = new URLSearchParams({ q: query.trim() });
-            window.history.pushState({}, "", `/search?${next.toString()}`);
-            setFeed(loadFeed());
+            router.push(`/search?q=${encodeURIComponent(query.trim())}`);
           }}
         >
           <span className="settings-search-icon" aria-hidden>
@@ -71,16 +62,17 @@ function SearchInner() {
             aria-label={t("search.title")}
           />
         </form>
+        {loading ? <div className="vk-empty">{t("search.searching")}</div> : null}
       </div>
 
       <div className="vk-card vk-main-pad">
-        <h2 className="vk-section-title">{t("search.people", { n: people.length })}</h2>
+        <h2 className="vk-section-title">{t("search.people", { n: data.people.length })}</h2>
         <div className="vk-list">
-          {people.slice(0, 12).map((p) => (
+          {data.people.slice(0, 20).map((p) => (
             <div key={p.id} className="vk-list-row">
               <div className="vk-avatar sm">{p.avatar}</div>
               <div>
-                <Link href="/friends?tab=search">{p.name}</Link>
+                <Link href={`/friends?tab=search&q=${encodeURIComponent(p.name)}`}>{p.name}</Link>
                 <div style={{ color: "var(--vk-muted)", marginTop: 2 }}>
                   {p.city}
                   {p.bio ? ` · ${p.bio}` : ""}
@@ -88,14 +80,14 @@ function SearchInner() {
               </div>
             </div>
           ))}
-          {!people.length ? <div className="vk-empty">{t("search.noPeople")}</div> : null}
+          {!data.people.length ? <div className="vk-empty">{t("search.noPeople")}</div> : null}
         </div>
       </div>
 
       <div className="vk-card vk-main-pad">
-        <h2 className="vk-section-title">{t("search.groups", { n: groups.length })}</h2>
+        <h2 className="vk-section-title">{t("search.groups", { n: data.groups.length })}</h2>
         <div className="vk-list">
-          {groups.slice(0, 12).map((g) => (
+          {data.groups.slice(0, 12).map((g) => (
             <div key={g.id} className="vk-list-row">
               <div className="vk-avatar sm">{g.cover}</div>
               <div>
@@ -104,21 +96,33 @@ function SearchInner() {
               </div>
             </div>
           ))}
-          {!groups.length ? <div className="vk-empty">{t("search.noGroups")}</div> : null}
+          {!data.groups.length ? <div className="vk-empty">{t("search.noGroups")}</div> : null}
         </div>
       </div>
 
       <div className="vk-card vk-main-pad">
-        <h2 className="vk-section-title">{t("search.posts", { n: posts.length })}</h2>
+        <h2 className="vk-section-title">{t("search.posts", { n: data.posts.length })}</h2>
       </div>
-      {posts.slice(0, 20).map((post) => (
+      {data.posts.slice(0, 20).map((post) => (
         <PostCard
           key={post.id}
           post={post}
-          onLike={(id) => setFeed(toggleLike(id))}
-          onComment={(id, text) => setFeed(addComment(id, text))}
-          onRepost={(id) => setFeed(repost(id))}
-          onBookmark={(id) => setFeed(toggleBookmark(id).feed)}
+          onLike={async (id) => {
+            await postAction(id, "like");
+            await load(q);
+          }}
+          onComment={async (id, text) => {
+            await postAction(id, "comment", text);
+            await load(q);
+          }}
+          onRepost={async (id) => {
+            await postAction(id, "repost");
+            await load(q);
+          }}
+          onBookmark={async (id) => {
+            await postAction(id, "bookmark");
+            await load(q);
+          }}
         />
       ))}
     </div>

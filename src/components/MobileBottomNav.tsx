@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useT } from "@/lib/i18n/I18nProvider";
 import { NavIcon } from "./NavIcons";
+import { useUnreadBadges } from "@/lib/useBadges";
 
 const items = [
   { href: "/", icon: "profile", key: "nav.profile" },
@@ -16,6 +17,7 @@ const items = [
 export function MobileBottomNav() {
   const pathname = usePathname();
   const t = useT();
+  const badges = useUnreadBadges();
 
   return (
     <nav className="mobile-bottom-nav" aria-label="Primary">
@@ -33,8 +35,8 @@ export function MobileBottomNav() {
           >
             <span className="mobile-bottom-icon">
               <NavIcon name={item.icon} />
-              {"badge" in item && item.badge ? (
-                <span className="vk-badge">{item.badge}</span>
+              {item.href === "/messages" && badges.messages ? (
+                <span className="vk-badge">{badges.messages}</span>
               ) : null}
             </span>
             <span className="mobile-bottom-label">{t(item.key)}</span>

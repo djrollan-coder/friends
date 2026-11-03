@@ -101,7 +101,7 @@ export function ScheduleMessageModal({
   const [hh, mm] = time.split(":").map((x) => Number(x));
   const sendAt = new Date(selected);
   sendAt.setHours(hh || 0, mm || 0, 0, 0);
-  const valid = sendAt.getTime() > Date.now() + 15_000;
+  const valid = sendAt.getTime() > now.getTime() + 15_000;
 
   const primaryLabel = sameDay(selected, now)
     ? t("msg.sendTodayAt", { time })

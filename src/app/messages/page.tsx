@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { friends } from "@/data/mock";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createGroupChat,
   deleteChat,
-  loadChats,
+  fetchChats,
   peerOf,
   type ChatThread,
 } from "@/lib/chatStore";
+import { fetchPeople } from "@/lib/friendsStore";
+import type { Person } from "@/lib/dto";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { useLive } from "@/lib/live";
 import { useRouter } from "next/navigation";
 
 function ThreadRow({
@@ -69,27 +71,31 @@ export default function MessagesPage() {
   const router = useRouter();
   const t = useT();
   const [chats, setChats] = useState<ChatThread[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
-  const [picked, setPicked] = useState<string[]>([friends[0].id, friends[1].id]);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    setChats(loadChats());
+  const load = useCallback(async () => {
+    setChats(await fetchChats());
   }, []);
 
-  const groups = useMemo(() => {
-    const lastAt = (t: ChatThread) => t.messages[t.messages.length - 1]?.createdAt ?? "";
-    return chats
-      .filter((t) => t.type === "group")
-      .sort((a, b) => lastAt(b).localeCompare(lastAt(a), "ru"));
-  }, [chats]);
+  useEffect(() => {
+    void load();
+    void fetchPeople().then((list) => {
+      setPeople(list);
+      setPicked((prev) => (prev.length ? prev : list.slice(0, 2).map((p) => p.id)));
+    });
+  }, [load]);
 
-  const dms = useMemo(() => {
-    const lastAt = (t: ChatThread) => t.messages[t.messages.length - 1]?.createdAt ?? "";
-    return chats
-      .filter((t) => t.type === "dm")
-      .sort((a, b) => lastAt(b).localeCompare(lastAt(a), "ru"));
-  }, [chats]);
+  useLive(["message"], (event) => {
+    if (event.read) return;
+    void load();
+  });
+
+  const groups = useMemo(() => chats.filter((c) => c.type === "group"), [chats]);
+  const dms = useMemo(() => chats.filter((c) => c.type === "dm"), [chats]);
 
   function toggleMember(id: string) {
     setPicked((prev) =>
@@ -101,13 +107,22 @@ export default function MessagesPage() {
     router.push(`/messages/${id}`);
   }
 
-  function removeThread(id: string) {
+  async function removeThread(id: string) {
     if (!window.confirm(t("messages.deleteConfirm"))) return;
-    setChats(deleteChat(id));
+    setChats(await deleteChat(id));
   }
 
-  function openCreate() {
-    setCreating(true);
+  async function createChat() {
+    setBusy(true);
+    try {
+      const { thread, chats: next } = await createGroupChat(title, picked);
+      setChats(next);
+      setCreating(false);
+      setTitle("");
+      router.push(`/messages/${thread.id}`);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -139,7 +154,7 @@ export default function MessagesPage() {
                   className="messages-group-delete"
                   aria-label={t("messages.delete")}
                   title={t("messages.delete")}
-                  onClick={() => removeThread(thread.id)}
+                  onClick={() => void removeThread(thread.id)}
                 >
                   ×
                 </button>
@@ -149,7 +164,7 @@ export default function MessagesPage() {
           <button
             type="button"
             className="messages-group-add"
-            onClick={openCreate}
+            onClick={() => setCreating(true)}
             aria-label={t("messages.createGroup")}
             title={t("messages.createGroup")}
           >
@@ -177,7 +192,7 @@ export default function MessagesPage() {
             />
           </label>
           <div className="interest-chips is-edit" style={{ marginTop: 10 }}>
-            {friends.map((f) => (
+            {people.map((f) => (
               <button
                 key={f.id}
                 type="button"
@@ -192,14 +207,8 @@ export default function MessagesPage() {
             type="button"
             className="vk-btn"
             style={{ marginTop: 12 }}
-            disabled={!picked.length}
-            onClick={() => {
-              const { thread, chats: next } = createGroupChat(title, picked);
-              setChats(next);
-              setCreating(false);
-              setTitle("");
-              router.push(`/messages/${thread.id}`);
-            }}
+            disabled={!picked.length || busy}
+            onClick={() => void createChat()}
           >
             {t("common.create")}
           </button>
@@ -212,11 +221,12 @@ export default function MessagesPage() {
             key={thread.id}
             thread={thread}
             onOpen={openThread}
-            onDelete={removeThread}
+            onDelete={(id) => void removeThread(id)}
             emptyLabel={t("messages.noMessages")}
             deleteLabel={t("messages.delete")}
           />
         ))}
+        {!dms.length ? <div className="vk-empty">{t("common.empty")}</div> : null}
       </div>
     </div>
   );

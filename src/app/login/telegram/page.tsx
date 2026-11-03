@@ -1,9 +1,9 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import { AUTH_STORAGE_KEY, type AuthUser } from "@/lib/auth";
+import type { AuthUser } from "@/lib/auth";
 import type { TelegramLoginPayload } from "@/lib/telegramTypes";
 import "@/app/login/login.css";
 
@@ -38,11 +38,6 @@ function readOauthPayload(search: URLSearchParams): TelegramLoginPayload | null 
 
 function finishLogin(user: AuthUser, login: (u: AuthUser) => void) {
   login(user);
-  try {
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
-  } catch {
-    /* ignore */
-  }
   if (typeof window !== "undefined" && window.opener && !window.opener.closed) {
     try {
       window.opener.location.href = "/";
@@ -56,7 +51,6 @@ function finishLogin(user: AuthUser, login: (u: AuthUser) => void) {
 }
 
 function TelegramCallbackInner() {
-  const router = useRouter();
   const params = useSearchParams();
   const { login } = useAuth();
   const [error, setError] = useState("");

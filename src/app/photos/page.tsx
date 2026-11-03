@@ -1,17 +1,37 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { albumTitle, albums, photos, type PhotoItem } from "@/data/albums";
-import { useI18n, useT } from "@/lib/i18n/I18nProvider";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api, uploadFile } from "@/lib/api";
+import { useT } from "@/lib/i18n/I18nProvider";
 
 type Tab = "photos" | "albums";
 type SortMode = "newest" | "oldest" | "name" | "likes" | "album";
 type ViewMode = "grid-l" | "grid-m" | "grid-s" | "list" | "masonry";
 
+type AlbumItem = {
+  id: string;
+  title: string;
+  count: number;
+  cover: string;
+  tone: string;
+};
+
+type PhotoItem = {
+  id: string;
+  albumId: string;
+  title: string;
+  tone: string;
+  label: string;
+  url?: string;
+  createdAt: string;
+  createdLabel: string;
+  likes: number;
+};
+
 const SORT_IDS: SortMode[] = ["newest", "oldest", "name", "likes", "album"];
 const VIEW_IDS: ViewMode[] = ["grid-l", "grid-m", "grid-s", "list", "masonry"];
 
-function sortPhotos(list: PhotoItem[], mode: SortMode) {
+function sortPhotos(list: PhotoItem[], mode: SortMode, titleOf: (id: string) => string) {
   const next = [...list];
   switch (mode) {
     case "oldest":
@@ -22,7 +42,7 @@ function sortPhotos(list: PhotoItem[], mode: SortMode) {
       return next.sort((a, b) => b.likes - a.likes);
     case "album":
       return next.sort((a, b) => {
-        const byAlbum = albumTitle(a.albumId).localeCompare(albumTitle(b.albumId), "ru");
+        const byAlbum = titleOf(a.albumId).localeCompare(titleOf(b.albumId), "ru");
         return byAlbum || b.createdAt.localeCompare(a.createdAt);
       });
     case "newest":
@@ -31,8 +51,8 @@ function sortPhotos(list: PhotoItem[], mode: SortMode) {
   }
 }
 
-function sortAlbums(mode: SortMode) {
-  const next = [...albums];
+function sortAlbums(list: AlbumItem[], mode: SortMode) {
+  const next = [...list];
   switch (mode) {
     case "name":
       return next.sort((a, b) => a.title.localeCompare(b.title, "ru"));
@@ -49,12 +69,34 @@ function sortAlbums(mode: SortMode) {
 
 export default function PhotosPage() {
   const t = useT();
-  const { tc } = useI18n();
   const [tab, setTab] = useState<Tab>("photos");
   const [sort, setSort] = useState<SortMode>("newest");
   const [view, setView] = useState<ViewMode>("grid-m");
   const [albumFilter, setAlbumFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
+  const [albums, setAlbums] = useState<AlbumItem[]>([]);
+  const [photos, setPhotos] = useState<PhotoItem[]>([]);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const data = await api<{ albums: AlbumItem[]; photos: PhotoItem[] }>("/api/photos");
+      setAlbums(data.albums);
+      setPhotos(data.photos);
+    } catch {
+      /* offline */
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const titleOf = useCallback(
+    (albumId: string) => albums.find((a) => a.id === albumId)?.title ?? "Альбом",
+    [albums],
+  );
 
   const sortLabelKey: Record<SortMode, string> = {
     newest: "photos.sortNewest",
@@ -94,15 +136,47 @@ export default function PhotosPage() {
     return photos.filter((p) => {
       if (albumFilter !== "all" && p.albumId !== albumFilter) return false;
       if (!q) return true;
-      return (
-        p.title.toLowerCase().includes(q) ||
-        albumTitle(p.albumId).toLowerCase().includes(q)
-      );
+      return p.title.toLowerCase().includes(q) || titleOf(p.albumId).toLowerCase().includes(q);
     });
-  }, [albumFilter, query]);
+  }, [photos, albumFilter, query, titleOf]);
 
-  const sortedPhotos = useMemo(() => sortPhotos(filtered, sort), [filtered, sort]);
-  const sortedAlbums = useMemo(() => sortAlbums(sort), [sort]);
+  const sortedPhotos = useMemo(() => sortPhotos(filtered, sort, titleOf), [filtered, sort, titleOf]);
+  const sortedAlbums = useMemo(() => sortAlbums(albums, sort), [albums, sort]);
+
+  async function createAlbum() {
+    const name = window.prompt(t("photos.createAlbum"));
+    if (!name?.trim()) return;
+    setBusy(true);
+    try {
+      const data = await api<{ albums: AlbumItem[] }>("/api/albums", {
+        method: "POST",
+        body: JSON.stringify({ title: name }),
+      });
+      setAlbums(data.albums);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function uploadPhoto(file?: File) {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const uploaded = await uploadFile(file);
+      await api("/api/photos", {
+        method: "POST",
+        body: JSON.stringify({
+          url: uploaded.url,
+          title: file.name.replace(/\.[^.]+$/, ""),
+          albumId: albumFilter === "all" ? undefined : albumFilter,
+        }),
+      });
+      await load();
+      setTab("photos");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="vk-card photos-page">
@@ -135,9 +209,29 @@ export default function PhotosPage() {
               {t("photos.tabAlbums")}
             </button>
           </div>
-          <button type="button" className="photos-create">
-            {t("photos.createAlbum")}
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              className="photos-create"
+              disabled={busy}
+              onClick={() => fileRef.current?.click()}
+            >
+              Загрузить фото
+            </button>
+            <button type="button" className="photos-create" disabled={busy} onClick={() => void createAlbum()}>
+              {t("photos.createAlbum")}
+            </button>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              void uploadPhoto(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
         </div>
 
         <div className="photos-controls">
@@ -168,7 +262,7 @@ export default function PhotosPage() {
                   <option value="all">{t("photos.allAlbums")}</option>
                   {albums.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {tc.album(a.id, a.title)}
+                      {a.title}
                     </option>
                   ))}
                 </select>
@@ -220,8 +314,10 @@ export default function PhotosPage() {
                 {album.cover}
               </span>
               <span className="photos-album-meta">
-                <span className="photos-album-title">{tc.album(album.id, album.title)}</span>
-                <span className="photos-album-count">{t("photos.albumCount", { n: album.count })}</span>
+                <span className="photos-album-title">{album.title}</span>
+                <span className="photos-album-count">
+                  {t("photos.albumCount", { n: album.count })}
+                </span>
               </span>
             </button>
           ))}
@@ -232,17 +328,53 @@ export default function PhotosPage() {
             <article
               key={photo.id}
               className={`photos-card tall-${(index % 5) + 1}`}
-              style={{ background: photo.tone }}
+              style={
+                photo.url
+                  ? {
+                      backgroundImage: `url(${photo.url})`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                    }
+                  : { background: photo.tone }
+              }
             >
               <div className="photos-card-mark" aria-hidden>
                 {photo.label}
               </div>
               <div className="photos-card-body">
-                <div className="photos-card-title">{tc.photo(photo.title)}</div>
+                <div className="photos-card-title">{photo.title}</div>
                 <div className="photos-card-meta">
-                  <span>{tc.album(photo.albumId, albumTitle(photo.albumId))}</span>
-                  <span>{tc.date(photo.createdLabel)}</span>
-                  <span>♥ {photo.likes}</span>
+                  <span>{titleOf(photo.albumId)}</span>
+                  <span>{photo.createdLabel}</span>
+                  <button
+                    type="button"
+                    className="photos-like-btn"
+                    onClick={async () => {
+                      const data = await api<{ photos: PhotoItem[] }>(`/api/photos/${photo.id}`, {
+                        method: "POST",
+                        body: JSON.stringify({ action: "like" }),
+                      });
+                      setPhotos(data.photos);
+                      void load();
+                    }}
+                  >
+                    ♥ {photo.likes}
+                  </button>
+                  <button
+                    type="button"
+                    className="photos-delete-btn"
+                    aria-label={t("common.delete")}
+                    onClick={async () => {
+                      if (!window.confirm(t("common.delete") + "?")) return;
+                      const data = await api<{ photos: PhotoItem[] }>(`/api/photos/${photo.id}`, {
+                        method: "DELETE",
+                      });
+                      setPhotos(data.photos);
+                      void load();
+                    }}
+                  >
+                    ×
+                  </button>
                 </div>
               </div>
             </article>

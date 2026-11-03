@@ -1,5 +1,5 @@
-import { friends } from "@/data/mock";
-import { peerOf, sendChatMessage, getChat } from "./chatStore";
+import { getChat, peerOf, sendChatMessage } from "./chatStore";
+import { getPerson } from "./friendsStore";
 
 export const SCHEDULED_KEY = "friends.scheduled.messages.v1";
 
@@ -18,10 +18,6 @@ export type ScheduledMessage = {
   quiet: true;
 };
 
-export type PresenceOverride = Record<string, boolean>;
-
-const PRESENCE_KEY = "friends.presence.override.v1";
-
 export function loadScheduled(): ScheduledMessage[] {
   if (typeof window === "undefined") return [];
   try {
@@ -39,35 +35,8 @@ export function saveScheduled(next: ScheduledMessage[]) {
   window.dispatchEvent(new Event("friends-scheduled-changed"));
 }
 
-function loadPresence(): PresenceOverride {
-  try {
-    const raw = localStorage.getItem(PRESENCE_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) as PresenceOverride;
-  } catch {
-    return {};
-  }
-}
-
-function savePresence(next: PresenceOverride) {
-  localStorage.setItem(PRESENCE_KEY, JSON.stringify(next));
-}
-
 export function isUserOnline(userId: string) {
-  const override = loadPresence()[userId];
-  if (typeof override === "boolean") return override;
-  return !!friends.find((f) => f.id === userId)?.online;
-}
-
-/** Quietly mark peer online later so «when online» can fire in demo */
-function armQuietOnline(peerId: string) {
-  if (isUserOnline(peerId)) return;
-  const delay = 12_000 + Math.floor(Math.random() * 18_000);
-  window.setTimeout(() => {
-    const next = { ...loadPresence(), [peerId]: true };
-    savePresence(next);
-    window.dispatchEvent(new Event("friends-presence-changed"));
-  }, delay);
+  return Boolean(getPerson(userId)?.online);
 }
 
 export function scheduleTimerMessage(threadId: string, text: string, delayMs: number) {
@@ -87,12 +56,11 @@ export function scheduleTimerMessage(threadId: string, text: string, delayMs: nu
   return next;
 }
 
-export function scheduleWhenOnline(threadId: string, text: string) {
+export function scheduleWhenOnline(threadId: string, text: string, peerIdArg?: string) {
   const trimmed = text.trim();
   if (!trimmed) return loadScheduled();
   const chat = getChat(threadId);
-  if (!chat || chat.type !== "dm") return loadScheduled();
-  const peer = peerOf(chat);
+  const peer = peerIdArg ? { id: peerIdArg } : chat ? peerOf(chat) : undefined;
   if (!peer) return loadScheduled();
 
   const item: ScheduledMessage = {
@@ -106,7 +74,6 @@ export function scheduleWhenOnline(threadId: string, text: string) {
   };
   const next = [...loadScheduled(), item];
   saveScheduled(next);
-  if (!isUserOnline(peer.id)) armQuietOnline(peer.id);
   return next;
 }
 
@@ -116,7 +83,7 @@ export function cancelScheduled(id: string) {
   return next;
 }
 
-export function processDueScheduled() {
+export async function processDueScheduled() {
   const now = Date.now();
   const all = loadScheduled();
   if (!all.length) return { remaining: all, sent: [] as ScheduledMessage[] };
@@ -130,8 +97,12 @@ export function processDueScheduled() {
     if (item.mode === "when_online" && item.peerId && isUserOnline(item.peerId)) due = true;
 
     if (due) {
-      sendChatMessage(item.threadId, item.text);
-      sent.push(item);
+      try {
+        await sendChatMessage(item.threadId, item.text);
+        sent.push(item);
+      } catch {
+        remaining.push(item);
+      }
     } else {
       remaining.push(item);
     }

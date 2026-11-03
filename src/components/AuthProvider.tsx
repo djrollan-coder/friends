@@ -10,19 +10,15 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  clearAuth,
-  isDemoTelegramUser,
-  loadAuth,
-  saveAuth,
-  type AuthUser,
-} from "@/lib/auth";
+import type { AuthUser } from "@/lib/auth";
+import { setSessionAuthUser } from "@/lib/sessionUser";
 
 type AuthContextValue = {
   user: AuthUser | null;
   ready: boolean;
   login: (user: AuthUser) => void;
   logout: () => void;
+  refresh: () => Promise<AuthUser | null>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -33,27 +29,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  useEffect(() => {
-    try {
-      const stored = loadAuth();
-      // Drop leftover demo Telegram sessions so real Login Widget is used.
-      if (isDemoTelegramUser(stored)) {
-        clearAuth();
-        setUser(null);
-      } else {
-        setUser(stored);
-      }
-    } catch {
-      setUser(null);
-    }
-    setReady(true);
+  const applyUser = useCallback((next: AuthUser | null) => {
+    setSessionAuthUser(next);
+    setUser(next);
   }, []);
+
+  const refresh = useCallback(async () => {
+    try {
+      const response = await fetch("/api/auth/me", { credentials: "same-origin", cache: "no-store" });
+      const data = (await response.json()) as { user: AuthUser | null };
+      const next = data.user ?? null;
+      applyUser(next);
+      return next;
+    } catch {
+      applyUser(null);
+      return null;
+    }
+  }, [applyUser]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch("/api/auth/me", {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        const data = (await response.json()) as { user: AuthUser | null };
+        if (!cancelled) applyUser(data.user ?? null);
+      } catch {
+        if (!cancelled) applyUser(null);
+      } finally {
+        if (!cancelled) setReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [applyUser]);
 
   useEffect(() => {
     if (!ready) return;
-    const isAuthPage =
-      pathname === "/login" ||
-      pathname.startsWith("/login/");
+    const isAuthPage = pathname === "/login" || pathname.startsWith("/login/");
     if (!user && !isAuthPage) {
       router.replace("/login");
     } else if (user && isAuthPage) {
@@ -61,20 +78,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [ready, user, pathname, router]);
 
-  const login = useCallback((next: AuthUser) => {
-    saveAuth(next);
-    setUser(next);
-  }, []);
+  const login = useCallback(
+    (next: AuthUser) => {
+      applyUser(next);
+    },
+    [applyUser],
+  );
 
   const logout = useCallback(() => {
-    clearAuth();
-    setUser(null);
+    void fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => {});
+    applyUser(null);
     router.replace("/login");
-  }, [router]);
+  }, [applyUser, router]);
 
   const value = useMemo(
-    () => ({ user, ready, login, logout }),
-    [user, ready, login, logout],
+    () => ({ user, ready, login, logout, refresh }),
+    [user, ready, login, logout, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { useT } from "@/lib/i18n/I18nProvider";
-import { unreadCount } from "@/lib/notify";
+import { fetchNotifications } from "@/lib/notify";
+import { useLive } from "@/lib/live";
 
 export function Header() {
   const { user, logout } = useAuth();
@@ -16,11 +17,22 @@ export function Header() {
   const [q, setQ] = useState("");
   const [badge, setBadge] = useState(0);
 
-  useEffect(() => {
-    setBadge(unreadCount());
-    const id = window.setInterval(() => setBadge(unreadCount()), 1500);
-    return () => window.clearInterval(id);
+  const refreshBadge = useCallback(async () => {
+    try {
+      const { unread } = await fetchNotifications();
+      setBadge(unread);
+    } catch {
+      /* offline */
+    }
   }, []);
+
+  useEffect(() => {
+    void refreshBadge();
+    const id = window.setInterval(() => void refreshBadge(), 20_000);
+    return () => window.clearInterval(id);
+  }, [refreshBadge]);
+
+  useLive(["notification"], () => void refreshBadge());
 
   return (
     <header className="vk-header">

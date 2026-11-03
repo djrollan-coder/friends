@@ -1,6 +1,7 @@
-import { getSessionUser } from "@/lib/sessionUser";
+import { api } from "./api";
+import type { ProfileDTO } from "./dto";
 
-export const PROFILE_BIO_KEY = "friends.profile.bio";
+export type { ProfileDTO } from "./dto";
 
 export type ProfileBio = {
   status: string;
@@ -10,34 +11,46 @@ export type ProfileBio = {
   relationship: string;
 };
 
-const defaults: ProfileBio = {
-  status: "Круг близких · без лишнего шума",
+export const emptyProfileBio: ProfileBio = {
+  status: "",
   about: "",
   city: "",
   birthday: "",
   relationship: "",
 };
 
-function keyFor(userId?: string) {
-  const id = userId ?? getSessionUser().id;
-  return `${PROFILE_BIO_KEY}.${id}`;
+export function bioFromProfile(profile: ProfileDTO): ProfileBio {
+  return {
+    status: profile.status ?? "",
+    about: profile.bio ?? "",
+    city: profile.city ?? "",
+    birthday: profile.birthday ?? "",
+    relationship: profile.relationship ?? "",
+  };
 }
 
-export function loadProfileBio(userId?: string): ProfileBio {
-  if (typeof window === "undefined") return defaults;
+export async function fetchProfile(id?: string): Promise<ProfileDTO | null> {
   try {
-    const raw = localStorage.getItem(keyFor(userId));
-    if (!raw) return { ...defaults };
-    return { ...defaults, ...(JSON.parse(raw) as Partial<ProfileBio>) };
+    const data = await api<{ profile: ProfileDTO }>(id ? `/api/users/${id}` : "/api/profile");
+    return data.profile;
   } catch {
-    return { ...defaults };
+    return null;
   }
 }
 
-export function saveProfileBio(next: ProfileBio, userId?: string) {
-  localStorage.setItem(keyFor(userId), JSON.stringify(next));
-}
-
-export function clearProfileBio(userId?: string) {
-  localStorage.removeItem(keyFor(userId));
+export async function saveProfile(patch: {
+  name?: string;
+  status?: string;
+  about?: string;
+  city?: string;
+  birthday?: string;
+  relationship?: string;
+  photo?: string | null;
+  cover?: string | null;
+}): Promise<ProfileDTO> {
+  const data = await api<{ profile: ProfileDTO }>("/api/profile", {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+  return data.profile;
 }

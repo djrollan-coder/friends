@@ -1,42 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { useAuth } from "@/components/AuthProvider";
+import { useLive } from "@/lib/live";
 import { Composer } from "./Composer";
 import { PostCard } from "./PostCard";
 import {
-  addComment,
   createPost,
-  loadFeed,
-  repost,
-  toggleBookmark,
-  toggleLike,
+  fetchFeed,
+  postAction,
   type FeedPost,
 } from "@/lib/feedStore";
-import { getSessionUser } from "@/lib/sessionUser";
 
 export function Wall() {
   const t = useT();
+  const { user } = useAuth();
   const [posts, setPosts] = useState<FeedPost[]>([]);
 
-  useEffect(() => {
-    const me = getSessionUser().id;
-    setPosts(loadFeed().filter((p) => p.author.id === me));
-  }, []);
+  const load = useCallback(async () => {
+    if (!user?.id) return;
+    setPosts(await fetchFeed({ author: user.id, limit: 100 }));
+  }, [user]);
 
-  function refresh(next: FeedPost[]) {
-    const me = getSessionUser().id;
-    setPosts(next.filter((p) => p.author.id === me));
-  }
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useLive(["post", "post-updated"], () => void load());
 
   return (
     <div className="vk-wall-stack">
       <div className="vk-card vk-main-pad">
         <h2 className="vk-section-title">{t("wall.title")}</h2>
         <Composer
-          onSubmit={({ text, image, video }) => {
-            createPost({ text, image, video });
-            refresh(loadFeed());
+          onSubmit={async ({ text, image, video }) => {
+            await createPost({ text, image, video });
+            await load();
           }}
         />
       </div>
@@ -44,10 +44,22 @@ export function Wall() {
         <PostCard
           key={post.id}
           post={post}
-          onLike={(id) => refresh(toggleLike(id))}
-          onComment={(id, text) => refresh(addComment(id, text))}
-          onRepost={(id) => refresh(repost(id))}
-          onBookmark={(id) => refresh(toggleBookmark(id).feed)}
+          onLike={async (id) => {
+            await postAction(id, "like");
+            await load();
+          }}
+          onComment={async (id, text) => {
+            await postAction(id, "comment", text);
+            await load();
+          }}
+          onRepost={async (id) => {
+            await postAction(id, "repost");
+            await load();
+          }}
+          onBookmark={async (id) => {
+            await postAction(id, "bookmark");
+            await load();
+          }}
         />
       ))}
     </div>

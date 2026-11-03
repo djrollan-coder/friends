@@ -7,14 +7,15 @@ import { interestOptions } from "@/data/interests";
 import { contentInterest } from "@/lib/i18n/contentMaps";
 import { useI18n, useT } from "@/lib/i18n/I18nProvider";
 import { useInterests } from "@/lib/useInterests";
-import {
-  createInvite,
-  loadInvites,
-  loadPrivacy,
-  savePrivacy,
-  type CirclePrivacy,
-  type InviteCode,
-} from "@/lib/circleStore";
+import { api } from "@/lib/api";
+import type { CirclePrivacy } from "@/lib/circleStore";
+
+type InviteItem = {
+  code: string;
+  note: string;
+  usesLeft: number;
+  createdAt: number;
+};
 
 type Tab = "circle" | "privacy" | "interests" | "invites" | "language" | "drive";
 
@@ -34,13 +35,31 @@ export default function SettingsPage() {
   const { selected, toggle } = useInterests();
   const [tab, setTab] = useState<Tab>("circle");
   const [query, setQuery] = useState("");
-  const [privacy, setPrivacy] = useState<CirclePrivacy>(() => loadPrivacy());
-  const [invites, setInvites] = useState<InviteCode[]>([]);
+  const [privacy, setPrivacy] = useState<CirclePrivacy>({
+    wall: "friends",
+    messages: "friends",
+    calls: "close",
+    searchable: false,
+    showOnline: true,
+  });
+  const [invites, setInvites] = useState<InviteItem[]>([]);
   const [copied, setCopied] = useState("");
 
   useEffect(() => {
-    setPrivacy(loadPrivacy());
-    setInvites(loadInvites());
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api<{ privacy: CirclePrivacy; invites: InviteItem[] }>("/api/settings");
+        if (cancelled) return;
+        setPrivacy(data.privacy);
+        setInvites(data.invites);
+      } catch {
+        /* keep defaults */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filtered = useMemo(() => {
@@ -55,7 +74,10 @@ export default function SettingsPage() {
   function updatePrivacy<K extends keyof CirclePrivacy>(key: K, value: CirclePrivacy[K]) {
     const next = { ...privacy, [key]: value };
     setPrivacy(next);
-    savePrivacy(next);
+    void api("/api/settings", {
+      method: "PATCH",
+      body: JSON.stringify({ [key]: value }),
+    }).catch(() => undefined);
   }
 
   return (
@@ -209,7 +231,16 @@ export default function SettingsPage() {
               <button
                 type="button"
                 className="vk-btn"
-                onClick={() => setInvites(createInvite().invites)}
+                onClick={async () => {
+                  try {
+                    const data = await api<{ invites: InviteItem[] }>("/api/invites", {
+                      method: "POST",
+                    });
+                    setInvites(data.invites);
+                  } catch {
+                    /* ignore */
+                  }
+                }}
               >
                 {t("settings.newCode")}
               </button>

@@ -1,28 +1,44 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  loadNotifications,
+  fetchNotifications,
   markAllRead,
   markRead,
   type NotificationItem,
 } from "@/lib/notify";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { useLive } from "@/lib/live";
 
 export default function NotificationsPage() {
   const t = useT();
   const [items, setItems] = useState<NotificationItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const { items: next } = await fetchNotifications();
+      setItems(next);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    setItems(loadNotifications());
-  }, []);
+    void load();
+  }, [load]);
+
+  useLive(["notification"], () => void load());
 
   return (
     <div className="vk-card vk-main-pad">
       <div className="messages-head">
         <h1 className="vk-page-title">{t("notifications.title")}</h1>
-        <button type="button" onClick={() => setItems(markAllRead())}>
+        <button
+          type="button"
+          onClick={async () => setItems(await markAllRead())}
+        >
           {t("notifications.readAll")}
         </button>
       </div>
@@ -34,7 +50,9 @@ export default function NotificationsPage() {
               key={n.id}
               href={n.href}
               className={`vk-list-row notify-row${n.read ? "" : " is-unread"}`}
-              onClick={() => setItems(markRead(n.id))}
+              onClick={() => {
+                if (!n.read) void markRead(n.id);
+              }}
             >
               <div className="notify-type">{n.type}</div>
               <div style={{ minWidth: 0 }}>
@@ -44,8 +62,10 @@ export default function NotificationsPage() {
               <div className="vk-list-meta">{n.createdAt}</div>
             </Link>
           ))
-        ) : (
+        ) : !loading ? (
           <div className="vk-empty">{t("notifications.empty")}</div>
+        ) : (
+          <div className="vk-empty">{t("common.loading")}</div>
         )}
       </div>
     </div>

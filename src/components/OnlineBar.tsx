@@ -1,10 +1,12 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { onlineFriends } from "@/data/mock";
 import { ensureDm } from "@/lib/chatStore";
+import { fetchFriends } from "@/lib/friendsStore";
+import type { UserDTO } from "@/lib/dto";
+import { useLive } from "@/lib/live";
 import { useT } from "@/lib/i18n/I18nProvider";
 import {
   loadRightBlocks,
@@ -23,6 +25,7 @@ export function OnlineBar() {
   const [enabled, setEnabled] = useState<RightBlockId[]>([]);
   const [mounted, setMounted] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 60, right: 56 });
+  const [friends, setFriends] = useState<UserDTO[]>([]);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -67,8 +70,23 @@ export function OnlineBar() {
     setOpen((v) => !v);
   }
 
-  function openDm(userId: string) {
-    const { thread } = ensureDm(userId);
+  const loadFriends = useCallback(async () => {
+    try {
+      const data = await fetchFriends();
+      setFriends(data.people.filter((p) => data.online.includes(p.id)));
+    } catch {
+      /* offline */
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadFriends();
+  }, [loadFriends]);
+
+  useLive(["presence", "friends"], () => void loadFriends());
+
+  async function openDm(userId: string) {
+    const { thread } = await ensureDm(userId);
     router.push(`/messages/${thread.id}`);
   }
 
@@ -126,14 +144,14 @@ export function OnlineBar() {
         +
       </button>
       <div className="vk-chatbar-list">
-        {onlineFriends.map((friend) => (
+        {friends.map((friend) => (
           <button
             key={friend.id}
             type="button"
             className="vk-chatbar-friend"
             title={friend.name}
             aria-label={t("right.openChatWith", { name: friend.name })}
-            onClick={() => openDm(friend.id)}
+            onClick={() => void openDm(friend.id)}
           >
             <span className="vk-avatar" aria-hidden>
               {friend.avatar}

@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import {
-  authUserFromTelegram,
   telegramConfigured,
   verifyTelegramLogin,
   type TelegramLoginPayload,
 } from "@/lib/telegramAuth";
+import {
+  createSession,
+  findOrCreateTelegramUser,
+  toAuthUser,
+} from "@/lib/server/auth";
 
 export async function POST(request: Request) {
   if (!telegramConfigured()) {
@@ -24,5 +28,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_telegram" }, { status: 401 });
   }
 
-  return NextResponse.json({ user: authUserFromTelegram(body) });
+  const name = [body.first_name, body.last_name].filter(Boolean).join(" ");
+  const row = findOrCreateTelegramUser({
+    id: body.id,
+    name,
+    username: body.username,
+    photoUrl: body.photo_url,
+  });
+  await createSession(row.id, request);
+  return NextResponse.json({ user: toAuthUser(row) });
 }

@@ -32,10 +32,10 @@ async function tgApi(method: string, body: Record<string, unknown>) {
   return res.json().catch(() => null);
 }
 
-function siteOrigin() {
+function siteOrigin(request: Request) {
   return (
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
-    "https://friends-two-amber.vercel.app"
+    new URL(request.url).origin
   );
 }
 
@@ -66,8 +66,8 @@ export async function POST(request: Request) {
   // Skip profile photo on the hot path — keeps webhook under Telegram's timeout.
   const preview = authUserFromBotClaims({ ...claims, exp: Math.floor(Date.now() / 1000) + 600 });
   const loginToken = signBotLoginToken(claims, botToken);
-  const bridgeUrl = `${siteOrigin()}/api/auth/telegram/open-app?t=${encodeURIComponent(loginToken)}`;
-  const webUrl = `${siteOrigin()}/login/telegram?t=${encodeURIComponent(loginToken)}`;
+  const bridgeUrl = `${siteOrigin(request)}/api/auth/telegram/open-app?t=${encodeURIComponent(loginToken)}`;
+  const webUrl = `${siteOrigin(request)}/login/telegram?t=${encodeURIComponent(loginToken)}`;
 
   if (payload.startsWith("f_") && payload.length > 4) {
     const sessionToken = payload.slice(2);

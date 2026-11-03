@@ -1,20 +1,21 @@
 import { NextResponse } from "next/server";
 
-function siteOrigin() {
+function siteOrigin(request: Request) {
   return (
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
-    "https://friends-two-amber.vercel.app"
+    new URL(request.url).origin
   );
 }
 
 export async function GET(request: Request) {
+  const origin = siteOrigin(request);
   const t = new URL(request.url).searchParams.get("t")?.trim();
   if (!t) {
-    return NextResponse.redirect(`${siteOrigin()}/login`);
+    return NextResponse.redirect(`${origin}/login`);
   }
 
   const friends = `friends://auth?t=${encodeURIComponent(t)}`;
-  const web = `${siteOrigin()}/login/telegram?t=${encodeURIComponent(t)}`;
+  const web = `${origin}/login/telegram?t=${encodeURIComponent(t)}`;
 
   const html = `<!DOCTYPE html>
 <html lang="ru">

@@ -9,6 +9,7 @@ import { OnlineBar } from "@/components/OnlineBar";
 import { RightSidebar } from "@/components/RightSidebar";
 import { ScheduledSendRunner } from "@/components/ScheduledSendRunner";
 import { useAuth } from "@/components/AuthProvider";
+import { LiveBridge } from "@/lib/live";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -48,6 +49,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (isManage) {
     return (
       <div className="vk-page admin-shell">
+        <LiveBridge />
         <Header />
         <main className="admin-shell-main">{children}</main>
         <ScheduledSendRunner />
@@ -57,6 +59,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="vk-page has-mobile-nav">
+      <LiveBridge />
       <Header />
       <div className="vk-shell">
         <LeftNav />

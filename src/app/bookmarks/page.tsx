@@ -1,32 +1,33 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PostCard } from "@/components/PostCard";
 import {
-  addComment,
-  loadBookmarks,
-  loadFeed,
-  repost,
-  toggleBookmark,
-  toggleLike,
+  fetchBookmarks,
+  postAction,
   type FeedPost,
 } from "@/lib/feedStore";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { useLive } from "@/lib/live";
 
 export default function BookmarksPage() {
   const t = useT();
-  const [feed, setFeed] = useState<FeedPost[]>([]);
-  const [marks, setMarks] = useState<string[]>([]);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setFeed(loadFeed());
-    setMarks(loadBookmarks());
+  const load = useCallback(async () => {
+    try {
+      setPosts(await fetchBookmarks());
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const posts = useMemo(
-    () => feed.filter((p) => marks.includes(p.id) || p.bookmarked),
-    [feed, marks],
-  );
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useLive(["post", "post-updated"], () => void load());
 
   return (
     <div className="sortable-stack">
@@ -36,24 +37,33 @@ export default function BookmarksPage() {
           {t("bookmarks.savedCount", { n: posts.length })}
         </p>
       </div>
+      {loading ? <div className="vk-card vk-main-pad vk-empty">{t("common.loading")}</div> : null}
       {posts.length ? (
         posts.map((post) => (
           <PostCard
             key={post.id}
             post={{ ...post, bookmarked: true }}
-            onLike={(id) => setFeed(toggleLike(id))}
-            onComment={(id, text) => setFeed(addComment(id, text))}
-            onRepost={(id) => setFeed(repost(id))}
-            onBookmark={(id) => {
-              const next = toggleBookmark(id);
-              setFeed(next.feed);
-              setMarks(next.bookmarks);
+            onLike={async (id) => {
+              await postAction(id, "like");
+              await load();
+            }}
+            onComment={async (id, text) => {
+              await postAction(id, "comment", text);
+              await load();
+            }}
+            onRepost={async (id) => {
+              await postAction(id, "repost");
+              await load();
+            }}
+            onBookmark={async (id) => {
+              await postAction(id, "bookmark");
+              await load();
             }}
           />
         ))
-      ) : (
+      ) : !loading ? (
         <div className="vk-card vk-main-pad vk-empty">{t("bookmarks.empty")}</div>
-      )}
+      ) : null}
     </div>
   );
 }

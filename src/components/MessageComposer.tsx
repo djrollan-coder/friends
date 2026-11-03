@@ -22,10 +22,11 @@ import { ScheduleMessageModal } from "./ScheduleMessageModal";
 type Props = {
   threadId?: string;
   isDm?: boolean;
-  onSend?: (text: string) => void;
+  peerId?: string;
+  onSend?: (text: string) => void | Promise<void>;
   /** silent = no sound / quiet send */
-  onSendSilent?: (text: string) => void;
-  onScheduled?: () => void;
+  onSendSilent?: (text: string) => void | Promise<void>;
+  onScheduled?: () => void | Promise<void>;
 };
 
 type MenuPos = { x: number; y: number };
@@ -33,6 +34,7 @@ type MenuPos = { x: number; y: number };
 export function MessageComposer({
   threadId,
   isDm,
+  peerId,
   onSend,
   onSendSilent,
   onScheduled,
@@ -80,8 +82,8 @@ export function MessageComposer({
   function send(silent = false) {
     const value = text.trim();
     if (!value) return;
-    if (silent) onSendSilent?.(value) ?? onSend?.(value);
-    else onSend?.(value);
+    if (silent && onSendSilent) void onSendSilent(value);
+    else void onSend?.(value);
     setText("");
   }
 
@@ -183,7 +185,7 @@ export function MessageComposer({
               label={t("msg.whenOnline")}
               onClick={() => {
                 if (!threadId || !text.trim()) return;
-                scheduleWhenOnline(threadId, text);
+                scheduleWhenOnline(threadId, text, peerId);
                 afterSchedule();
               }}
             />

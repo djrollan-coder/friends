@@ -1,62 +1,109 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  acceptFriend,
-  cancelOutgoing,
-  declineFriend,
-  getPerson,
-  loadFriendsState,
-  recommendations,
-  removeFriend,
+  fetchFriends,
+  friendAction,
+  relationOf,
   searchPeople,
-  sendFriendRequest,
-  toggleFollow,
-  type FriendsState,
+  type FriendAction,
 } from "@/lib/friendsStore";
 import { ensureDm } from "@/lib/chatStore";
-import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/AuthProvider";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { useLive } from "@/lib/live";
 import { SwipeFriendRow } from "@/components/SwipeFriendRow";
+import type { FriendsState, Person } from "@/lib/dto";
 
 type Tab = "all" | "requests" | "outgoing" | "search" | "recommended" | "following";
+
+const EMPTY_STATE: FriendsState = {
+  friendIds: [],
+  incoming: [],
+  outgoing: [],
+  following: [],
+};
 
 function FriendsInner() {
   const t = useT();
   const router = useRouter();
+  const { user } = useAuth();
   const params = useSearchParams();
   const tab = (params.get("tab") as Tab) || "all";
-  const [state, setState] = useState<FriendsState>(() => loadFriendsState());
+  const [state, setState] = useState<FriendsState>(EMPTY_STATE);
+  const [people, setPeople] = useState<Person[]>([]);
+  const [online, setOnline] = useState<string[]>([]);
   const [query, setQuery] = useState(params.get("q") ?? "");
+  const [busyId, setBusyId] = useState("");
 
-  useEffect(() => {
-    setState(loadFriendsState());
+  const load = useCallback(async () => {
+    const data = await fetchFriends();
+    setState(data.state);
+    setPeople(data.people);
+    setOnline(data.online);
   }, []);
 
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    setQuery(params.get("q") ?? "");
+  }, [params]);
+
+  useLive(["friends", "presence"], () => void load());
+
+  const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
+
   const friends = useMemo(
-    () => state.friendIds.map((id) => getPerson(id)).filter(Boolean),
-    [state.friendIds],
+    () => state.friendIds.map((id) => byId.get(id)).filter(Boolean) as Person[],
+    [state.friendIds, byId],
   );
   const incoming = useMemo(
-    () => state.incoming.map((id) => getPerson(id)).filter(Boolean),
-    [state.incoming],
+    () => state.incoming.map((id) => byId.get(id)).filter(Boolean) as Person[],
+    [state.incoming, byId],
   );
   const outgoing = useMemo(
-    () => state.outgoing.map((id) => getPerson(id)).filter(Boolean),
-    [state.outgoing],
+    () => state.outgoing.map((id) => byId.get(id)).filter(Boolean) as Person[],
+    [state.outgoing, byId],
   );
-  const recommended = useMemo(() => recommendations(state), [state]);
-  const searchResults = useMemo(() => searchPeople(query, state), [query, state]);
+  const recommended = useMemo(
+    () =>
+      people.filter(
+        (p) =>
+          p.id !== user?.id &&
+          !state.friendIds.includes(p.id) &&
+          !state.incoming.includes(p.id) &&
+          !state.outgoing.includes(p.id),
+      ),
+    [people, state, user?.id],
+  );
+  const searchResults = useMemo(
+    () =>
+      searchPeople(query, people)
+        .filter((p) => p.id !== user?.id)
+        .map((p) => ({ ...p, relation: relationOf(p.id, state) })),
+    [query, people, state, user?.id],
+  );
 
   function setTab(next: Tab) {
     const url = next === "all" ? "/friends" : `/friends?tab=${next}`;
     router.push(url);
   }
 
-  function openDm(userId: string) {
-    const { thread } = ensureDm(userId);
+  async function act(personId: string, action: FriendAction) {
+    setBusyId(personId);
+    try {
+      setState(await friendAction(personId, action));
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function openDm(userId: string) {
+    const { thread } = await ensureDm(userId);
     router.push(`/messages/${thread.id}`);
   }
 
@@ -107,7 +154,7 @@ function FriendsInner() {
           {t("friends.countFriends")}
         </span>
         <span>
-          <strong>{friends.filter((f) => f?.online).length}</strong>
+          <strong>{friends.filter((f) => online.includes(f.id)).length}</strong>
           {t("friends.countOnline")}
         </span>
         <span>
@@ -118,69 +165,73 @@ function FriendsInner() {
 
       {tab === "all" ? (
         <div className="friends-list">
-          {friends.map((friend) =>
-            friend ? (
-              <SwipeFriendRow
-                key={friend.id}
-                deleteLabel={t("friends.remove")}
-                onDelete={() => {
-                  if (!window.confirm(t("friends.removeConfirm"))) return;
-                  setState(removeFriend(state, friend.id));
-                }}
-              >
-                <div className="vk-list-row friends-row">
-                  <button
-                    type="button"
-                    className="friends-avatar-btn"
-                    aria-label={t("friends.write")}
-                    onClick={() => openDm(friend.id)}
-                  >
-                    <div className="vk-avatar sm">{friend.avatar}</div>
-                  </button>
-                  <div className="friends-row-main">
-                    <Link href="/">{friend.name}</Link>
-                    {friend.online ? (
-                      <span className="vk-online-dot" title={t("common.online")} />
-                    ) : null}
-                    <div style={{ color: "var(--vk-muted)", marginTop: 2 }}>
-                      {friend.online ? t("friends.onlineNow") : t("friends.wasRecently")}
-                    </div>
+          {friends.map((friend) => (
+            <SwipeFriendRow
+              key={friend.id}
+              deleteLabel={t("friends.remove")}
+              onDelete={() => {
+                if (!window.confirm(t("friends.removeConfirm"))) return;
+                void act(friend.id, "remove");
+              }}
+            >
+              <div className="vk-list-row friends-row">
+                <button
+                  type="button"
+                  className="friends-avatar-btn"
+                  aria-label={t("friends.write")}
+                  onClick={() => void openDm(friend.id)}
+                >
+                  <div className="vk-avatar sm">{friend.avatar}</div>
+                </button>
+                <div className="friends-row-main">
+                  <Link href={`/friends?tab=search&q=${encodeURIComponent(friend.name)}`}>
+                    {friend.name}
+                  </Link>
+                  {online.includes(friend.id) ? (
+                    <span className="vk-online-dot" title={t("common.online")} />
+                  ) : null}
+                  <div style={{ color: "var(--vk-muted)", marginTop: 2 }}>
+                    {online.includes(friend.id) ? t("friends.onlineNow") : t("friends.wasRecently")}
                   </div>
                 </div>
-              </SwipeFriendRow>
-            ) : null,
-          )}
+              </div>
+            </SwipeFriendRow>
+          ))}
+          {!friends.length ? <div className="vk-empty">{t("common.empty")}</div> : null}
         </div>
       ) : null}
 
       {tab === "requests" ? (
         <div className="vk-list">
           {incoming.length ? (
-            incoming.map((person) =>
-              person ? (
-                <div key={person.id} className="vk-list-row">
-                  <div className="vk-avatar sm">{person.avatar}</div>
-                  <div>
-                    <strong>{person.name}</strong>
-                    <div style={{ color: "var(--vk-muted)", marginTop: 2 }}>
-                      {t("friends.wantsAdd")}
-                    </div>
-                  </div>
-                  <div className="vk-list-meta friends-actions">
-                    <button
-                      type="button"
-                      className="vk-btn"
-                      onClick={() => setState(acceptFriend(state, person.id))}
-                    >
-                      {t("friends.accept")}
-                    </button>
-                    <button type="button" onClick={() => setState(declineFriend(state, person.id))}>
-                      {t("friends.decline")}
-                    </button>
+            incoming.map((person) => (
+              <div key={person.id} className="vk-list-row">
+                <div className="vk-avatar sm">{person.avatar}</div>
+                <div>
+                  <strong>{person.name}</strong>
+                  <div style={{ color: "var(--vk-muted)", marginTop: 2 }}>
+                    {t("friends.wantsAdd")}
                   </div>
                 </div>
-              ) : null,
-            )
+                <div className="vk-list-meta friends-actions">
+                  <button
+                    type="button"
+                    className="vk-btn"
+                    disabled={busyId === person.id}
+                    onClick={() => void act(person.id, "accept")}
+                  >
+                    {t("friends.accept")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busyId === person.id}
+                    onClick={() => void act(person.id, "decline")}
+                  >
+                    {t("friends.decline")}
+                  </button>
+                </div>
+              </div>
+            ))
           ) : (
             <div className="vk-empty">{t("friends.noIncoming")}</div>
           )}
@@ -190,24 +241,26 @@ function FriendsInner() {
       {tab === "outgoing" ? (
         <div className="vk-list">
           {outgoing.length ? (
-            outgoing.map((person) =>
-              person ? (
-                <div key={person.id} className="vk-list-row">
-                  <div className="vk-avatar sm">{person.avatar}</div>
-                  <div>
-                    <strong>{person.name}</strong>
-                    <div style={{ color: "var(--vk-muted)", marginTop: 2 }}>
-                      {t("friends.requestSent")}
-                    </div>
-                  </div>
-                  <div className="vk-list-meta friends-actions">
-                    <button type="button" onClick={() => setState(cancelOutgoing(state, person.id))}>
-                      {t("friends.cancel")}
-                    </button>
+            outgoing.map((person) => (
+              <div key={person.id} className="vk-list-row">
+                <div className="vk-avatar sm">{person.avatar}</div>
+                <div>
+                  <strong>{person.name}</strong>
+                  <div style={{ color: "var(--vk-muted)", marginTop: 2 }}>
+                    {t("friends.requestSent")}
                   </div>
                 </div>
-              ) : null,
-            )
+                <div className="vk-list-meta friends-actions">
+                  <button
+                    type="button"
+                    disabled={busyId === person.id}
+                    onClick={() => void act(person.id, "cancel")}
+                  >
+                    {t("friends.cancel")}
+                  </button>
+                </div>
+              </div>
+            ))
           ) : (
             <div className="vk-empty">{t("common.empty")}</div>
           )}
@@ -216,46 +269,61 @@ function FriendsInner() {
 
       {tab === "recommended" || tab === "search" ? (
         <div className="vk-list">
-          {(tab === "search" ? searchResults : recommended).map((person) => (
-            <div key={person.id} className="vk-list-row">
-              <div className="vk-avatar sm">{person.avatar}</div>
-              <div>
-                <strong>{person.name}</strong>
-                <div style={{ color: "var(--vk-muted)", marginTop: 2 }}>
-                  {person.city}
-                  {person.bio ? ` · ${person.bio}` : ""}
+          {(tab === "search" ? searchResults : recommended).map((person) => {
+            const relation = "relation" in person ? person.relation : relationOf(person.id, state);
+            return (
+              <div key={person.id} className="vk-list-row">
+                <div className="vk-avatar sm">{person.avatar}</div>
+                <div>
+                  <strong>{person.name}</strong>
+                  <div style={{ color: "var(--vk-muted)", marginTop: 2 }}>
+                    {person.city}
+                    {person.bio ? ` · ${person.bio}` : ""}
+                  </div>
+                </div>
+                <div className="vk-list-meta friends-actions">
+                  {relation === "friend" ? (
+                    <span>{t("friends.inFriends")}</span>
+                  ) : relation === "outgoing" ? (
+                    <button
+                      type="button"
+                      disabled={busyId === person.id}
+                      onClick={() => void act(person.id, "cancel")}
+                    >
+                      {t("friends.cancel")}
+                    </button>
+                  ) : relation === "incoming" ? (
+                    <button
+                      type="button"
+                      className="vk-btn"
+                      disabled={busyId === person.id}
+                      onClick={() => void act(person.id, "accept")}
+                    >
+                      {t("friends.accept")}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="vk-btn"
+                      disabled={busyId === person.id}
+                      onClick={() => void act(person.id, "request")}
+                    >
+                      {t("friends.add")}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={busyId === person.id}
+                    onClick={() => void act(person.id, "follow")}
+                  >
+                    {state.following.includes(person.id)
+                      ? t("friends.unfollow")
+                      : t("friends.follow")}
+                  </button>
                 </div>
               </div>
-              <div className="vk-list-meta friends-actions">
-                {"relation" in person && person.relation === "friend" ? (
-                  <span>{t("friends.inFriends")}</span>
-                ) : "relation" in person && person.relation === "outgoing" ? (
-                  <button type="button" onClick={() => setState(cancelOutgoing(state, person.id))}>
-                    {t("friends.cancel")}
-                  </button>
-                ) : "relation" in person && person.relation === "incoming" ? (
-                  <button
-                    type="button"
-                    className="vk-btn"
-                    onClick={() => setState(acceptFriend(state, person.id))}
-                  >
-                    {t("friends.accept")}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="vk-btn"
-                    onClick={() => setState(sendFriendRequest(state, person.id))}
-                  >
-                    {t("friends.add")}
-                  </button>
-                )}
-                <button type="button" onClick={() => setState(toggleFollow(state, person.id))}>
-                  {state.following.includes(person.id) ? t("friends.unfollow") : t("friends.follow")}
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
 
@@ -263,16 +331,22 @@ function FriendsInner() {
         <div className="vk-list">
           {state.following.length ? (
             state.following.map((id) => {
-              const person = getPerson(id);
+              const person = byId.get(id);
               return (
                 <div key={id} className="vk-list-row">
                   <div className="vk-avatar sm">{person?.avatar ?? "??"}</div>
                   <div>
                     <strong>{person?.name ?? id}</strong>
-                    <div style={{ color: "var(--vk-muted)", marginTop: 2 }}>{t("friends.subscription")}</div>
+                    <div style={{ color: "var(--vk-muted)", marginTop: 2 }}>
+                      {t("friends.subscription")}
+                    </div>
                   </div>
                   <div className="vk-list-meta friends-actions">
-                    <button type="button" onClick={() => setState(toggleFollow(state, id))}>
+                    <button
+                      type="button"
+                      disabled={busyId === id}
+                      onClick={() => void act(id, "follow")}
+                    >
                       {t("friends.unfollow")}
                     </button>
                   </div>

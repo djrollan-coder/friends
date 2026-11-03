@@ -1,54 +1,14 @@
-import { getSessionUser } from "@/lib/sessionUser";
-
-export const PROFILE_MEDIA_KEY = "friends.profile.media";
-
 export type ProfileMedia = {
   photo: string;
   cover: string;
 };
 
-const fallbackCover = "/profile/cover.jpg";
+export const defaultProfileMedia: ProfileMedia = {
+  photo: "/profile/avatar.jpg",
+  cover: "/profile/cover.jpg",
+};
 
-function keyFor(userId?: string) {
-  const id = userId ?? getSessionUser().id;
-  return `${PROFILE_MEDIA_KEY}.${id}`;
-}
-
-export function defaultProfileMedia(userId?: string): ProfileMedia {
-  const me = userId ? { id: userId, photo: undefined as string | undefined } : getSessionUser();
-  const authPhoto =
-    !userId || userId === getSessionUser().id ? getSessionUser().photo : undefined;
-  return {
-    photo: authPhoto || "/profile/avatar.jpg",
-    cover: fallbackCover,
-  };
-}
-
-export function loadProfileMedia(userId?: string): ProfileMedia {
-  const defaults = defaultProfileMedia(userId);
-  if (typeof window === "undefined") return defaults;
-  try {
-    const raw = localStorage.getItem(keyFor(userId));
-    if (!raw) return defaults;
-    const parsed = JSON.parse(raw) as Partial<ProfileMedia>;
-    return {
-      photo: parsed.photo || defaults.photo,
-      cover: parsed.cover || defaults.cover,
-    };
-  } catch {
-    return defaults;
-  }
-}
-
-export function saveProfileMedia(next: ProfileMedia, userId?: string) {
-  localStorage.setItem(keyFor(userId), JSON.stringify(next));
-}
-
-export function clearProfileMedia(userId?: string) {
-  localStorage.removeItem(keyFor(userId));
-}
-
-/** Compress image file to a data URL so it fits in localStorage for the prototype. */
+/** Compress an image file to a data URL before it is uploaded. */
 export function fileToDataUrl(
   file: File,
   opts: { maxWidth: number; maxHeight: number; quality?: number },

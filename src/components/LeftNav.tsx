@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { extraNav, navItems, shortcutLinks } from "@/data/mock";
 import { useI18n, useT } from "@/lib/i18n/I18nProvider";
+import { useUnreadBadges } from "@/lib/useBadges";
 import { NavIcon } from "./NavIcons";
 
 const STORAGE_KEY = "friends.nav.collapsed";
@@ -31,6 +32,7 @@ export function LeftNav() {
   const t = useT();
   const { tc } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
+  const badges = useUnreadBadges();
 
   useEffect(() => {
     try {
@@ -98,7 +100,9 @@ export function LeftNav() {
                 <NavIcon name={item.icon} />
               </span>
               {!collapsed ? <span className="vk-nav-label">{label}</span> : null}
-              {item.badge ? <span className="vk-badge">{item.badge}</span> : null}
+              {item.href === "/messages" && badges.messages ? (
+                <span className="vk-badge">{badges.messages}</span>
+              ) : null}
             </Link>
           );
         })}
@@ -111,7 +115,6 @@ export function LeftNav() {
                 <NavIcon name={item.icon} />
               </span>
               {!collapsed ? <span className="vk-nav-label">{label}</span> : null}
-              {item.badge ? <span className="vk-badge">{item.badge}</span> : null}
             </Link>
           );
         })}

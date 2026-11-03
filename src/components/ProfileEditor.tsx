@@ -3,25 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useT } from "@/lib/i18n/I18nProvider";
 import {
-  clearProfileMedia,
+  defaultProfileMedia,
   fileToDataUrl,
-  loadProfileMedia,
-  saveProfileMedia,
   type ProfileMedia,
 } from "@/lib/profileMedia";
-import {
-  clearProfileBio,
-  loadProfileBio,
-  saveProfileBio,
-  type ProfileBio,
-} from "@/lib/profileStore";
+import { emptyProfileBio, type ProfileBio } from "@/lib/profileStore";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   media: ProfileMedia;
   bio: ProfileBio;
-  onSave: (next: { media: ProfileMedia; bio: ProfileBio }) => void;
+  onSave: (next: { media: ProfileMedia; bio: ProfileBio }) => Promise<void> | void;
 };
 
 export function ProfileEditor({ open, onClose, media, bio, onSave }: Props) {
@@ -29,6 +22,7 @@ export function ProfileEditor({ open, onClose, media, bio, onSave }: Props) {
   const [draftMedia, setDraftMedia] = useState(media);
   const [draftBio, setDraftBio] = useState(bio);
   const [busy, setBusy] = useState<"photo" | "cover" | null>(null);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const photoRef = useRef<HTMLInputElement>(null);
   const coverRef = useRef<HTMLInputElement>(null);
@@ -63,25 +57,22 @@ export function ProfileEditor({ open, onClose, media, bio, onSave }: Props) {
     }
   }
 
-  function save() {
+  async function save() {
+    setSaving(true);
+    setError("");
     try {
-      saveProfileMedia(draftMedia);
-      saveProfileBio(draftBio);
-      onSave({ media: draftMedia, bio: draftBio });
+      await onSave({ media: draftMedia, bio: draftBio });
       onClose();
     } catch {
       setError(t("profile.saveError"));
+    } finally {
+      setSaving(false);
     }
   }
 
   function resetDefaults() {
-    clearProfileMedia();
-    clearProfileBio();
-    const nextMedia = loadProfileMedia();
-    const nextBio = loadProfileBio();
-    setDraftMedia(nextMedia);
-    setDraftBio(nextBio);
-    onSave({ media: nextMedia, bio: nextBio });
+    setDraftMedia(defaultProfileMedia);
+    setDraftBio(emptyProfileBio);
   }
 
   return (
@@ -213,7 +204,7 @@ export function ProfileEditor({ open, onClose, media, bio, onSave }: Props) {
             <button type="button" className="profile-editor-cancel" onClick={onClose}>
               {t("common.cancel")}
             </button>
-            <button type="button" className="profile-editor-save" onClick={save} disabled={!!busy}>
+            <button type="button" className="profile-editor-save" onClick={() => void save()} disabled={!!busy || saving}>
               {t("common.save")}
             </button>
           </div>

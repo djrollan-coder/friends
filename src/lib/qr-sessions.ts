@@ -41,16 +41,14 @@ export function getQrSession(token: string) {
   return session;
 }
 
-export function confirmQrSession(token: string) {
+export function confirmQrSession(
+  token: string,
+  user: { id: string; name: string; username?: string; avatar: string },
+) {
   const session = getQrSession(token);
   if (!session || session.status === "expired") return null;
   session.status = "confirmed";
-  session.user = {
-    id: "tg-42",
-    name: "Роман Моторный",
-    username: "roman",
-    avatar: "РМ",
-  };
+  session.user = user;
   store().set(token, session);
   return session;
 }

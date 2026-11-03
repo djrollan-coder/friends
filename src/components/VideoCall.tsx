@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { friends, type User } from "@/data/mock";
 import { getSessionUser } from "@/lib/sessionUser";
-import { pushNotification } from "@/lib/notify";
 import { useT } from "@/lib/i18n/I18nProvider";
 
 export type CallParticipant = {
@@ -106,12 +105,6 @@ export function VideoCall({ open, title, mode, participants, onClose }: Props) {
           await localVideoRef.current.play().catch(() => undefined);
         }
         setReady(true);
-        pushNotification({
-          type: "message",
-          title: mode === "group" ? t("call.groupTitle") : t("call.title"),
-          body: title,
-          href: "/messages",
-        });
       } catch {
         if (!alive) return;
         setError(t("call.noMedia"));

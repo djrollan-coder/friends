@@ -2,12 +2,12 @@
 
 import { useRef, useState } from "react";
 import { useT } from "@/lib/i18n/I18nProvider";
-import { fileToDataUrl } from "@/lib/profileMedia";
+import { uploadFile } from "@/lib/api";
 
 type Props = {
   title?: string;
   placeholder?: string;
-  onSubmit: (payload: { text: string; image?: string; video?: string }) => void;
+  onSubmit: (payload: { text: string; image?: string; video?: string }) => void | Promise<void>;
 };
 
 export function Composer({ title, placeholder, onSubmit }: Props) {
@@ -16,6 +16,7 @@ export function Composer({ title, placeholder, onSubmit }: Props) {
   const [image, setImage] = useState<string | undefined>();
   const [video, setVideo] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const imageRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
 
@@ -25,9 +26,13 @@ export function Composer({ title, placeholder, onSubmit }: Props) {
   async function onImage(file?: File) {
     if (!file) return;
     setBusy(true);
+    setError("");
     try {
-      setImage(await fileToDataUrl(file, { maxWidth: 1200, maxHeight: 1200, quality: 0.82 }));
+      const uploaded = await uploadFile(file);
+      setImage(uploaded.url);
       setVideo(undefined);
+    } catch {
+      setError(t("profile.uploadError"));
     } finally {
       setBusy(false);
     }
@@ -36,15 +41,13 @@ export function Composer({ title, placeholder, onSubmit }: Props) {
   async function onVideo(file?: File) {
     if (!file) return;
     setBusy(true);
+    setError("");
     try {
-      const reader = new FileReader();
-      const data = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error("read failed"));
-        reader.readAsDataURL(file);
-      });
-      setVideo(data);
+      const uploaded = await uploadFile(file);
+      setVideo(uploaded.url);
       setImage(undefined);
+    } catch {
+      setError(t("profile.uploadError"));
     } finally {
       setBusy(false);
     }
@@ -52,7 +55,7 @@ export function Composer({ title, placeholder, onSubmit }: Props) {
 
   function submit() {
     if (!text.trim() && !image && !video) return;
-    onSubmit({ text, image, video });
+    void onSubmit({ text, image, video });
     setText("");
     setImage(undefined);
     setVideo(undefined);
@@ -77,10 +80,11 @@ export function Composer({ title, placeholder, onSubmit }: Props) {
         <div className="vk-composer-preview" style={{ backgroundImage: `url(${image})` }} />
       ) : null}
       {video ? <video className="vk-post-video" src={video} controls /> : null}
+      {error ? <div className="profile-editor-error">{error}</div> : null}
       <div className="vk-composer-actions">
         <div className="vk-composer-tools">
           <button type="button" onClick={() => imageRef.current?.click()} disabled={busy}>
-            {t("composer.photo")}
+            {busy ? t("common.loading") : t("composer.photo")}
           </button>
           <button type="button" onClick={() => videoRef.current?.click()} disabled={busy}>
             {t("composer.video")}

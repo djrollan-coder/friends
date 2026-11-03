@@ -1,28 +1,45 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { getSessionUser } from "@/lib/sessionUser";
+import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
 import {
   createGroup,
-  joinGroup,
-  leaveGroup,
-  loadGroups,
+  fetchGroups,
+  groupAction,
   type Community,
 } from "@/lib/groupsStore";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { useLive } from "@/lib/live";
 
 export default function GroupsPage() {
   const t = useT();
+  const { user } = useAuth();
   const [groups, setGroups] = useState<Community[]>([]);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [privacy, setPrivacy] = useState<"public" | "private">("public");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setGroups(await fetchGroups());
+  }, []);
 
   useEffect(() => {
-    setGroups(loadGroups());
-  }, []);
+    void load();
+  }, [load]);
+
+  useLive(["group"], () => void load());
+
+  async function act(id: string, action: "join" | "leave") {
+    setBusy(true);
+    try {
+      setGroups(await groupAction(id, action));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="vk-main-pad">
@@ -63,12 +80,17 @@ export default function GroupsPage() {
             type="button"
             className="vk-btn"
             style={{ marginTop: 12 }}
-            onClick={() => {
-              const { groups: next } = createGroup({ name, desc, privacy });
-              setGroups(next);
-              setOpen(false);
-              setName("");
-              setDesc("");
+            disabled={busy || !name.trim()}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                setGroups(await createGroup({ name, desc, privacy }));
+                setOpen(false);
+                setName("");
+                setDesc("");
+              } finally {
+                setBusy(false);
+              }
             }}
           >
             {t("groups.createCommunity")}
@@ -78,7 +100,7 @@ export default function GroupsPage() {
 
       <div className="vk-list">
         {groups.map((group) => {
-          const joined = group.memberIds.includes(getSessionUser().id);
+          const joined = Boolean(user?.id && group.memberIds.includes(user.id));
           return (
             <div key={group.id} className="vk-list-row">
               <div className="vk-avatar sm">{group.cover}</div>
@@ -92,10 +114,14 @@ export default function GroupsPage() {
               <div className="vk-list-meta friends-actions">
                 <span>{t("groups.members", { n: group.memberIds.length })}</span>
                 {joined ? (
-                  group.ownerId === getSessionUser().id ? (
+                  group.ownerId === user?.id ? (
                     <span>{t("groups.youAdmin")}</span>
                   ) : (
-                    <button type="button" onClick={() => setGroups(leaveGroup(group.id))}>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void act(group.id, "leave")}
+                    >
                       {t("groups.leave")}
                     </button>
                   )
@@ -103,7 +129,8 @@ export default function GroupsPage() {
                   <button
                     type="button"
                     className="vk-btn"
-                    onClick={() => setGroups(joinGroup(group.id))}
+                    disabled={busy}
+                    onClick={() => void act(group.id, "join")}
                   >
                     {t("groups.join")}
                   </button>
@@ -112,6 +139,7 @@ export default function GroupsPage() {
             </div>
           );
         })}
+        {!groups.length ? <div className="vk-empty">{t("common.empty")}</div> : null}
       </div>
     </div>
   );
