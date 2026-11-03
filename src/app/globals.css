@@ -329,10 +329,12 @@ select:-webkit-autofill {
   z-index: 50;
 }
 
-/* Native iOS: solid bar under Dynamic Island, content clearly below it */
-html.is-native-ios {
-  --safe-top: max(var(--sat, 62px), env(safe-area-inset-top, 62px), 62px);
-  --safe-bottom: max(var(--sab, 34px), env(safe-area-inset-bottom, 34px), 34px);
+/* Native iOS WebView is already laid out below Dynamic Island — no CSS top pad */
+html.is-native-ios.is-native-safe-inset {
+  --safe-top: 0px;
+  --safe-bottom: 0px;
+  --safe-left: 0px;
+  --safe-right: 0px;
 }
 
 html.is-native-ios .vk-header {
@@ -340,9 +342,20 @@ html.is-native-ios .vk-header {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   border-bottom-color: rgba(255, 255, 255, 0.1);
-  /* Extra 2px so search/icons never kiss the island */
-  padding-top: calc(var(--safe-top) + 2px);
-  min-height: calc(var(--header-bar) + var(--safe-top) + 2px);
+}
+
+html.is-native-ios.is-native-safe-inset .vk-header {
+  padding-top: 0;
+  min-height: var(--header-bar);
+}
+
+html.is-native-ios.is-native-safe-inset .mobile-bottom-nav {
+  padding-bottom: 8px;
+  min-height: var(--bottom-nav);
+}
+
+html.is-native-ios.is-native-safe-inset .vk-page.has-mobile-nav {
+  padding-bottom: calc(var(--bottom-nav) + 10px);
 }
 
 .vk-header-inner {

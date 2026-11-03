@@ -6,19 +6,14 @@ struct RootView: View {
     @ObservedObject private var bridge = FriendsWebBridge.shared
 
     var body: some View {
-        // Capture real safe-area BEFORE full-bleed WebView zeros them.
-        GeometryReader { geo in
+        ZStack {
+            // Paint under Dynamic Island / home indicator
+            Color.black.ignoresSafeArea()
+
+            // WebView stays inside the safe area so the island never covers chrome
             FriendsWebContainer()
-                .ignoresSafeArea()
-                .onAppear {
-                    bridge.updateWindowSafeArea(geo.safeAreaInsets)
-                }
-                .onChange(of: geo.safeAreaInsets) { _, insets in
-                    bridge.updateWindowSafeArea(insets)
-                }
         }
-        .background(Color.black)
-        .ignoresSafeArea()
+        .preferredColorScheme(.dark)
         .onOpenURL { url in
             bridge.handleIncomingURL(url)
         }
@@ -45,19 +40,20 @@ private struct FriendsWebContainer: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let userContent = WKUserContentController()
         userContent.add(context.coordinator, name: "friends")
-        // iPhone 17 Pro / Dynamic Island defaults until measured insets arrive
+        // Native shell already insets the WebView — don't double-pad with CSS safe-top.
         let boot = WKUserScript(
             source: """
             window.__FRIENDS_NATIVE__=true;
             (function(){
               var r=document.documentElement;
               r.classList.add('is-native-ios');
-              r.style.setProperty('--sat','62px');
-              r.style.setProperty('--sab','34px');
+              r.classList.add('is-native-safe-inset');
+              r.style.setProperty('--sat','0px');
+              r.style.setProperty('--sab','0px');
               r.style.setProperty('--sal','0px');
               r.style.setProperty('--sar','0px');
-              r.style.setProperty('--safe-top','62px');
-              r.style.setProperty('--safe-bottom','34px');
+              r.style.setProperty('--safe-top','0px');
+              r.style.setProperty('--safe-bottom','0px');
               r.style.setProperty('--safe-left','0px');
               r.style.setProperty('--safe-right','0px');
             })();
@@ -83,6 +79,7 @@ private struct FriendsWebContainer: UIViewRepresentable {
         webView.isOpaque = false
         webView.backgroundColor = .black
         webView.scrollView.backgroundColor = .black
+        // System safe-area is applied by SwiftUI layout; don't add extra scroll insets.
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.alwaysBounceVertical = true
         webView.scrollView.contentInset = .zero
@@ -146,13 +143,11 @@ private struct FriendsWebContainer: UIViewRepresentable {
                 return
             }
 
-            // Keep Telegram OAuth pages inside the webview when possible.
             if let host = url.host?.lowercased(), host == "oauth.telegram.org" {
                 decisionHandler(.allow)
                 return
             }
 
-            // t.me / telegram links → open Telegram app, stay in Friends webview.
             if bridge.isTelegramHost(url) {
                 UIApplication.shared.open(url, options: [:], completionHandler: nil)
                 decisionHandler(.cancel)

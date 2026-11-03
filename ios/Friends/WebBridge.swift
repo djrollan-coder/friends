@@ -10,9 +10,6 @@ final class FriendsWebBridge: ObservableObject {
     weak var webView: WKWebView?
     let homeURL = URL(string: "https://friends-two-amber.vercel.app")!
 
-    /// Last known window safe-area (points). Updated from SwiftUI before ignoresSafeArea zeros them.
-    private(set) var windowSafeArea = UIEdgeInsets(top: 62, left: 0, bottom: 34, right: 0)
-
     func attach(_ webView: WKWebView) {
         self.webView = webView
     }
@@ -24,20 +21,6 @@ final class FriendsWebBridge: ObservableObject {
     func load(_ url: URL) {
         guard let webView else { return }
         webView.load(URLRequest(url: url))
-    }
-
-    func updateWindowSafeArea(_ insets: EdgeInsets) {
-        let ui = UIEdgeInsets(
-            top: insets.top,
-            left: insets.leading,
-            bottom: insets.bottom,
-            right: insets.trailing
-        )
-        // Ignore zeroed insets from ignoresSafeArea layouts.
-        if ui.top > 1 || ui.bottom > 1 {
-            windowSafeArea = ui
-        }
-        syncSafeAreaInsets()
     }
 
     /// JS timers pause while Telegram is open — kick auth poll when app is foregrounded.
@@ -57,45 +40,17 @@ final class FriendsWebBridge: ObservableObject {
         )
     }
 
-    private func resolvedInsets() -> UIEdgeInsets {
-        var insets = windowSafeArea
-
-        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-            let window = scene.windows.first(where: \.isKeyWindow) ?? scene.windows.first
-            if let window, window.safeAreaInsets.top > 1 {
-                insets = window.safeAreaInsets
-            }
-        }
-
-        // Dynamic Island devices: never go below a solid clearance under the island.
-        let minTop: CGFloat = 62
-        let minBottom: CGFloat = 34
-        if insets.top < minTop { insets.top = minTop }
-        if insets.bottom < minBottom { insets.bottom = minBottom }
-        return insets
-    }
-
-    /// Push Dynamic Island / home-indicator insets into CSS (WKWebView env() is often 0).
+    /// Native layout already respects the safe area — keep CSS insets at 0 to avoid double padding.
     func syncSafeAreaInsets() {
         guard let webView else { return }
-        let insets = resolvedInsets()
-        let top = insets.top
-        let bottom = insets.bottom
-        let left = insets.left
-        let right = insets.right
         let js = """
         (function(){
           var r = document.documentElement;
-          r.style.setProperty('--sat', '\(top)px');
-          r.style.setProperty('--sab', '\(bottom)px');
-          r.style.setProperty('--sal', '\(left)px');
-          r.style.setProperty('--sar', '\(right)px');
-          r.style.setProperty('--safe-top', '\(top)px');
-          r.style.setProperty('--safe-bottom', '\(bottom)px');
-          r.style.setProperty('--safe-left', '\(left)px');
-          r.style.setProperty('--safe-right', '\(right)px');
           r.classList.add('is-native-ios');
-          r.dataset.device = 'iphone-pro';
+          r.classList.add('is-native-safe-inset');
+          ['sat','sab','sal','sar','safe-top','safe-bottom','safe-left','safe-right'].forEach(function(k){
+            r.style.setProperty('--'+k, '0px');
+          });
         })();
         """
         webView.evaluateJavaScript(js, completionHandler: nil)
@@ -104,7 +59,6 @@ final class FriendsWebBridge: ObservableObject {
     func handleIncomingURL(_ url: URL) {
         guard isAppHost(url) || url.scheme == "friends" else { return }
         if url.scheme == "friends" {
-            // friends://auth?t=... → https://.../login/telegram?t=...
             var comps = URLComponents(url: homeURL, resolvingAgainstBaseURL: false)!
             comps.path = "/login/telegram"
             comps.query = url.query
