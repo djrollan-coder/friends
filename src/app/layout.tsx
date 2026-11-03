@@ -8,13 +8,23 @@ export const metadata: Metadata = {
   title: "Friends",
   description:
     "Friends — private network for your close circle: friends, feed, chats and calls.",
+  applicationName: "Friends",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     title: "Friends",
     statusBarStyle: "black-translucent",
   },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   other: {
     "color-scheme": "dark",
+    "mobile-web-app-capable": "yes",
   },
 };
 
