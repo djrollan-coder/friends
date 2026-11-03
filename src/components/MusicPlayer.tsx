@@ -318,36 +318,32 @@ function CompactPlayer() {
       </div>
 
       <div className="player-mini-actions">
-        <button
-          type="button"
-          className="player-icon-btn"
-          aria-label={t("audio.prev")}
-          onClick={prevTrack}
-        >
-          ⏮
-        </button>
-        <button
-          type="button"
-          className="player-icon-btn"
-          aria-label={playing ? t("audio.pause") : t("audio.play")}
-          onClick={() => setPlaying((v) => !v)}
-        >
-          {playing ? "❚❚" : "▶"}
-        </button>
-        <button
-          type="button"
-          className="player-icon-btn"
-          aria-label={t("audio.next")}
-          onClick={() => nextTrack()}
-        >
-          ⏭
-        </button>
-      </div>
-
-      <div className="player-mini-foot">
-        <Link href="/audio" className="vk-right-link player-mini-more">
-          {t("nav.audio")} →
-        </Link>
+        <div className="player-mini-transport">
+          <button
+            type="button"
+            className="player-icon-btn"
+            aria-label={t("audio.prev")}
+            onClick={prevTrack}
+          >
+            ⏮
+          </button>
+          <button
+            type="button"
+            className="player-icon-btn"
+            aria-label={playing ? t("audio.pause") : t("audio.play")}
+            onClick={() => setPlaying((v) => !v)}
+          >
+            {playing ? "❚❚" : "▶"}
+          </button>
+          <button
+            type="button"
+            className="player-icon-btn"
+            aria-label={t("audio.next")}
+            onClick={() => nextTrack()}
+          >
+            ⏭
+          </button>
+        </div>
         <div className="player-mini-volume">
           <input
             type="range"
@@ -363,6 +359,12 @@ function CompactPlayer() {
             }}
           />
         </div>
+      </div>
+
+      <div className="player-mini-foot">
+        <Link href="/audio" className="vk-right-link player-mini-more">
+          {t("nav.audio")} →
+        </Link>
       </div>
     </div>
   );

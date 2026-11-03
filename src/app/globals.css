@@ -3560,7 +3560,17 @@ button.interest-chip {
 .player-mini-actions {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.player-mini-transport {
+  display: flex;
+  align-items: center;
   gap: 6px;
+  flex: 0 0 auto;
 }
 
 .player-mini-actions .player-icon-btn {
@@ -3578,7 +3588,7 @@ button.interest-chip {
 .player-mini-foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   width: 100%;
   min-width: 0;
@@ -3597,8 +3607,8 @@ button.interest-chip {
 .player-mini-volume {
   flex: 1 1 auto;
   width: auto;
-  max-width: 120px;
-  min-width: 72px;
+  max-width: none;
+  min-width: 64px;
   margin: 0;
   padding: 0;
 }
