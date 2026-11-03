@@ -1550,6 +1550,53 @@ select:-webkit-autofill {
   font-size: 12px;
 }
 
+.friends-list,
+.friends-row {
+  touch-action: pan-y;
+  overscroll-behavior-x: none;
+}
+
+.friends-row {
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.friends-row-main {
+  min-width: 0;
+  flex: 1;
+}
+
+@media (max-width: 900px) {
+  /* No swipe-to-delete tray on phone — only explicit buttons */
+  .friends-row {
+    align-items: center;
+    gap: 10px;
+    padding: 12px 12px;
+  }
+
+  .friends-actions {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    margin-left: 0;
+  }
+
+  .friends-write-btn {
+    border: 0 !important;
+    background: transparent !important;
+    color: var(--vk-link) !important;
+    padding: 8px 6px !important;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+
+  .friends-remove-btn {
+    display: none !important;
+  }
+}
+
 .messages-head {
   display: flex;
   align-items: center;

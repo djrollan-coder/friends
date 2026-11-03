@@ -116,12 +116,12 @@ function FriendsInner() {
       </div>
 
       {tab === "all" ? (
-        <div className="vk-list">
+        <div className="vk-list friends-list">
           {friends.map((friend) =>
             friend ? (
-              <div key={friend.id} className="vk-list-row">
+              <div key={friend.id} className="vk-list-row friends-row">
                 <div className="vk-avatar sm">{friend.avatar}</div>
-                <div>
+                <div className="friends-row-main">
                   <Link href="/">{friend.name}</Link>
                   {friend.online ? (
                     <span className="vk-online-dot" title={t("common.online")} />
@@ -131,12 +131,20 @@ function FriendsInner() {
                   </div>
                 </div>
                 <div className="vk-list-meta friends-actions">
-                  <button type="button" onClick={() => openDm(friend.id)}>
+                  <button
+                    type="button"
+                    className="friends-write-btn"
+                    onClick={() => openDm(friend.id)}
+                  >
                     {t("friends.write")}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setState(removeFriend(state, friend.id))}
+                    className="friends-remove-btn"
+                    onClick={() => {
+                      if (!window.confirm(t("friends.removeConfirm"))) return;
+                      setState(removeFriend(state, friend.id));
+                    }}
                   >
                     {t("friends.remove")}
                   </button>
