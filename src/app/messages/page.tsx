@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { friends } from "@/data/mock";
 import {
   createGroupChat,
+  deleteChat,
   loadChats,
   peerOf,
   type ChatThread,
@@ -14,34 +15,53 @@ import { useRouter } from "next/navigation";
 function ThreadRow({
   thread,
   onOpen,
+  onDelete,
   emptyLabel,
+  deleteLabel,
 }: {
   thread: ChatThread;
   onOpen: (id: string) => void;
+  onDelete: (id: string) => void;
   emptyLabel: string;
+  deleteLabel: string;
 }) {
   const peer = peerOf(thread);
   const last = thread.messages[thread.messages.length - 1];
   return (
-    <button
-      type="button"
-      className="vk-list-row messages-row"
-      onClick={() => onOpen(thread.id)}
-    >
-      <div className="vk-avatar sm">{peer?.avatar ?? "??"}</div>
-      <div className="messages-row-main">
-        <div className="messages-row-title">{thread.title}</div>
-        <div className="messages-preview">{last?.text ?? emptyLabel}</div>
-      </div>
-      <div className="vk-list-meta">
-        {last?.createdAt ?? ""}
-        {thread.unread ? (
-          <span className="vk-badge" style={{ marginLeft: 8 }}>
-            {thread.unread}
-          </span>
-        ) : null}
-      </div>
-    </button>
+    <div className="messages-row-wrap">
+      <button
+        type="button"
+        className="vk-list-row messages-row"
+        onClick={() => onOpen(thread.id)}
+      >
+        <div className="vk-avatar sm">{peer?.avatar ?? "??"}</div>
+        <div className="messages-row-main">
+          <div className="messages-row-title">{thread.title}</div>
+          <div className="messages-preview">{last?.text ?? emptyLabel}</div>
+        </div>
+        <div className="vk-list-meta">
+          {last?.createdAt ?? ""}
+          {thread.unread ? (
+            <span className="vk-badge" style={{ marginLeft: 8 }}>
+              {thread.unread}
+            </span>
+          ) : null}
+        </div>
+      </button>
+      <button
+        type="button"
+        className="messages-delete-btn"
+        aria-label={deleteLabel}
+        title={deleteLabel}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onDelete(thread.id);
+        }}
+      >
+        ×
+      </button>
+    </div>
   );
 }
 
@@ -81,6 +101,11 @@ export default function MessagesPage() {
     router.push(`/messages/${id}`);
   }
 
+  function removeThread(id: string) {
+    if (!window.confirm(t("messages.deleteConfirm"))) return;
+    setChats(deleteChat(id));
+  }
+
   function openCreate() {
     setCreating(true);
   }
@@ -96,19 +121,29 @@ export default function MessagesPage() {
           {groups.map((thread) => {
             const last = thread.messages[thread.messages.length - 1];
             return (
-              <button
-                key={thread.id}
-                type="button"
-                className="messages-group-chip"
-                onClick={() => openThread(thread.id)}
-                title={last?.text ?? thread.title}
-              >
-                <span className="vk-avatar sm">GR</span>
-                <span className="messages-group-name">{thread.title}</span>
-                {thread.unread ? (
-                  <span className="vk-badge">{thread.unread}</span>
-                ) : null}
-              </button>
+              <div key={thread.id} className="messages-group-chip-wrap">
+                <button
+                  type="button"
+                  className="messages-group-chip"
+                  onClick={() => openThread(thread.id)}
+                  title={last?.text ?? thread.title}
+                >
+                  <span className="vk-avatar sm">GR</span>
+                  <span className="messages-group-name">{thread.title}</span>
+                  {thread.unread ? (
+                    <span className="vk-badge">{thread.unread}</span>
+                  ) : null}
+                </button>
+                <button
+                  type="button"
+                  className="messages-group-delete"
+                  aria-label={t("messages.delete")}
+                  title={t("messages.delete")}
+                  onClick={() => removeThread(thread.id)}
+                >
+                  ×
+                </button>
+              </div>
             );
           })}
           <button
@@ -177,7 +212,9 @@ export default function MessagesPage() {
             key={thread.id}
             thread={thread}
             onOpen={openThread}
+            onDelete={removeThread}
             emptyLabel={t("messages.noMessages")}
+            deleteLabel={t("messages.delete")}
           />
         ))}
       </div>

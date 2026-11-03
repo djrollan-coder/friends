@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { friends } from "@/data/mock";
 import { getSessionUser } from "@/lib/sessionUser";
 import {
+  clearChatMessages,
+  deleteChat,
   findChat,
-  getChat,
   loadChats,
   peerOf,
   sendChatMessage,
@@ -19,6 +20,7 @@ import { useT } from "@/lib/i18n/I18nProvider";
 
 export default function MessageThreadPage() {
   const t = useT();
+  const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const [thread, setThread] = useState<ChatThread | null | undefined>(undefined);
@@ -99,9 +101,33 @@ export default function MessageThreadPage() {
           <Link href="/messages">{t("messages.back")}</Link> ·{" "}
           {thread.type === "group" ? thread.title : peer?.name}
         </h1>
-        <button type="button" className="vk-btn" onClick={() => setInCall(true)}>
-          {thread.type === "group" ? t("messages.groupVideoCall") : t("messages.videoCall")}
-        </button>
+        <div className="messages-head-actions">
+          <button
+            type="button"
+            className="vk-btn ghost"
+            onClick={() => {
+              if (!window.confirm(t("messages.clearConfirm"))) return;
+              clearChatMessages(thread.id);
+              setThread(findChat(thread.id) ?? null);
+            }}
+          >
+            {t("messages.clear")}
+          </button>
+          <button
+            type="button"
+            className="vk-btn danger"
+            onClick={() => {
+              if (!window.confirm(t("messages.deleteConfirm"))) return;
+              deleteChat(thread.id);
+              router.replace("/messages");
+            }}
+          >
+            {t("messages.delete")}
+          </button>
+          <button type="button" className="vk-btn" onClick={() => setInCall(true)}>
+            {thread.type === "group" ? t("messages.groupVideoCall") : t("messages.videoCall")}
+          </button>
+        </div>
       </div>
       {thread.type === "group" ? (
         <div className="vk-status-box">

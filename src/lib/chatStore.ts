@@ -166,6 +166,34 @@ export function createGroupChat(title: string, memberIds: string[]) {
   return { chats: next, thread };
 }
 
+export function deleteChat(threadId: string) {
+  const next = loadChats().filter((c) => c.id !== threadId);
+  saveChats(next);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("friends-chat-updated", {
+        detail: { threadIds: [threadId], deleted: true },
+      }),
+    );
+  }
+  return next;
+}
+
+export function clearChatMessages(threadId: string) {
+  const next = loadChats().map((c) =>
+    c.id === threadId ? { ...c, messages: [], unread: 0 } : c,
+  );
+  saveChats(next);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("friends-chat-updated", {
+        detail: { threadIds: [threadId] },
+      }),
+    );
+  }
+  return next;
+}
+
 export function ensureDm(userId: string) {
   const chats = loadChats();
   const existing = chats.find(

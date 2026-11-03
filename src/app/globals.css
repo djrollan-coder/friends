@@ -1539,6 +1539,58 @@ select:-webkit-autofill {
   margin: 0;
 }
 
+.messages-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.vk-btn.ghost {
+  background: transparent;
+  border: 1px solid var(--vk-border);
+  color: var(--vk-text);
+}
+
+.vk-btn.danger {
+  background: rgba(180, 70, 70, 0.22);
+  border: 1px solid rgba(220, 110, 100, 0.45);
+  color: #f0b4ae;
+}
+
+.messages-row-wrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+.messages-row-wrap .messages-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.messages-delete-btn,
+.messages-group-delete {
+  border: 0;
+  background: transparent;
+  color: #a8aaae;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 8px;
+}
+
+.messages-delete-btn:hover,
+.messages-group-delete:hover {
+  color: #e98c83;
+}
+
+.messages-group-chip-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .messages-groups-row {
   display: flex;
   align-items: center;
