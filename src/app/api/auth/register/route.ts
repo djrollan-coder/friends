@@ -13,7 +13,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ user });
   } catch (error) {
     const code = error instanceof Error ? error.message : "register_failed";
-    const status = code === "exists" ? 409 : 400;
+    const status =
+      code === "exists" ? 409 : code === "registration_closed" ? 403 : 400;
     return NextResponse.json({ error: code }, { status });
   }
 }

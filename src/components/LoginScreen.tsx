@@ -289,6 +289,9 @@ export function LoginScreen() {
         else if (data.error === "weak_name") setEmailError(t("login.weakName"));
         else if (data.error === "exists") setEmailError(t("login.exists"));
         else if (data.error === "invalid_credentials") setEmailError(t("login.loginFail"));
+        else if (data.error === "registration_closed")
+          setEmailError("Регистрация сейчас закрыта администратором");
+        else if (data.error === "banned") setEmailError("Аккаунт заблокирован администратором");
         else setEmailError(mode === "register" ? t("login.registerFail") : t("login.loginFail"));
         return;
       }

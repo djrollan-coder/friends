@@ -27,9 +27,10 @@ npm run build && npm run start
 доступен только для чтения, приложение само переключается на системный temp —
 в этом случае данные не переживают перезапуск.
 
-> **Vercel/serverless:** файловая система инстанса эфемерна. Для постоянного
-> хранения на Vercel нужна внешняя БД (Postgres/KV); текущая реализация
-> рассчитана на локальный запуск, VPS или Docker с постоянным томом.
+> **Vercel/serverless:** файловая система инстанса эфемерна. SQLite в `/tmp`
+> не разделяется между инстансами: аккаунты, посты и сессии теряются. Для
+> постоянного хранения нужна внешняя БД (Postgres/Neon) и объектное хранилище
+> для файлов (Vercel Blob/S3), либо VPS/Docker с постоянным томом.
 
 ## Аккаунты
 
@@ -38,6 +39,28 @@ npm run build && npm run start
 - Вход по QR: телефон подтверждает сессию, десктоп получает cookie.
 - Новому аккаунту автоматически подставляются демо-друзья и контент, чтобы
   интерфейс не был пустым. Других реальных пользователей можно найти в поиске.
+
+## Админка
+
+`/manage` доступна пользователям с правами администратора:
+
+- **Обзор** — реальные метрики, график за 7 дней, последние события.
+- **Пользователи** — поиск, блокировка, выдача/снятие прав, удаление.
+- **Контент** — публикации, очередь премодерации, одобрение и удаление.
+- **Сообщество** — список групп и удаление.
+- **Безопасность** — жалобы пользователей, закрытие и удаление объекта.
+- **Настройки** — регистрация, премодерация, комментарии (применяются сразу).
+- **Скачать отчёт** — CSV с метриками и пользователями.
+
+Первый зарегистрированный пользователь автоматически становится админом.
+Дополнительно админов можно задать через `FRIENDS_ADMIN_EMAILS`.
+
+Готовый локальный вход в `/manage`:
+
+```text
+admin@friends.local
+secret123
+```
 
 ## Переменные окружения
 
@@ -49,6 +72,7 @@ TELEGRAM_BOT_TOKEN=
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=      # Google Drive backup (optional)
 NEXT_PUBLIC_SITE_URL=              # public origin for Telegram deep links
 FRIENDS_DATA_DIR=                  # optional persistent data directory
+FRIENDS_ADMIN_EMAILS=              # comma-separated admin emails
 ```
 
 ## Основные API
@@ -62,7 +86,8 @@ FRIENDS_DATA_DIR=                  # optional persistent data directory
 | Чаты | `/api/chats`, `/api/chats/[id]`, `/api/chats/[id]/messages` |
 | Уведомления | `/api/notifications`, `/api/notifications/[id]` |
 | Медиа | `/api/photos`, `/api/albums`, `/api/videos`, `/api/documents`, `/api/stories`, `/api/upload`, `/api/media/[name]` |
-| Разное | `/api/listings`, `/api/settings`, `/api/invites`, `/api/events` (SSE) |
+| Разное | `/api/listings`, `/api/settings`, `/api/invites`, `/api/events` (SSE), `/api/reports` |
+| Админка | `/api/admin/{overview,users,posts,groups,reports,settings,report.csv}` |
 
 ## Проверка
 

@@ -16,6 +16,7 @@ export default function FeedPage() {
   const t = useT();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -37,9 +38,14 @@ export default function FeedPage() {
         <h1 className="vk-page-title">{t("feed.pageTitle")}</h1>
         <p style={{ color: "var(--vk-muted)", marginTop: 0 }}>{t("feed.pageLead")}</p>
         <div className="circle-banner">{t("feed.banner")}</div>
+        {notice ? <div className="vk-status-box">{notice}</div> : null}
         <Composer
           onSubmit={async ({ text, image, video }) => {
-            await createPost({ text, image, video });
+            const created = await createPost({ text, image, video });
+            if (created?.status === "pending") {
+              setNotice("Публикация отправлена на модерацию — она появится после проверки.");
+              window.setTimeout(() => setNotice(""), 6000);
+            }
             await load();
           }}
         />

@@ -17,6 +17,30 @@ export function PostCard({ post, onLike, onComment, onRepost, onBookmark }: Prop
   const [openComments, setOpenComments] = useState(false);
   const [text, setText] = useState("");
 
+  async function reportPost() {
+    const reason = window.prompt("Почему вы жалуетесь на эту публикацию?");
+    if (reason === null) return;
+    try {
+      const response = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetType: "post", targetId: post.id, reason }),
+      });
+      if (response.ok) {
+        window.alert("Жалоба отправлена модератору");
+        return;
+      }
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      window.alert(
+        data.error === "already_reported"
+          ? "Вы уже отправили жалобу на эту публикацию"
+          : "Не удалось отправить жалобу",
+      );
+    } catch {
+      window.alert("Не удалось отправить жалобу");
+    }
+  }
+
   return (
     <article className="vk-post">
       <div className="vk-avatar sm">{post.author.avatar}</div>
@@ -73,6 +97,14 @@ export function PostCard({ post, onLike, onComment, onRepost, onBookmark }: Prop
           >
             {post.bookmarked ? t("post.saved") : t("post.save")}
           </button>
+          <button type="button" onClick={() => void reportPost()}>
+            Пожаловаться
+          </button>
+          {post.status === "pending" ? (
+            <span className="vk-badge" style={{ alignSelf: "center" }}>
+              На модерации
+            </span>
+          ) : null}
         </div>
 
         {openComments ? (
@@ -87,6 +119,9 @@ export function PostCard({ post, onLike, onComment, onRepost, onBookmark }: Prop
                 </div>
               </div>
             ))}
+            {post.commentsEnabled === false ? (
+              <div className="vk-post-date">Комментарии к этой записи отключены</div>
+            ) : (
             <form
               className="vk-comment-form"
               onSubmit={(e) => {
@@ -105,6 +140,7 @@ export function PostCard({ post, onLike, onComment, onRepost, onBookmark }: Prop
                 {t("post.send")}
               </button>
             </form>
+            )}
           </div>
         ) : null}
       </div>

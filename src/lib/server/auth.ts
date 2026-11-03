@@ -14,6 +14,7 @@ export type AuthUser = {
   photoUrl?: string;
   method: "telegram" | "qr" | "email";
   email?: string;
+  isAdmin?: boolean;
 };
 
 export type UserRow = {
@@ -37,6 +38,8 @@ export type UserRow = {
   searchable: number;
   show_online: number;
   is_demo: number;
+  is_admin: number;
+  banned: number;
   online: number;
   created_at: number;
   last_seen: number;
@@ -142,8 +145,25 @@ export async function getCurrentUser(): Promise<UserRow | null> {
     .get(token, Date.now()) as Row | undefined;
   if (!row) return null;
   const user = row as unknown as UserRow;
+  if (Number(user.banned) !== 0) {
+    db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
+    return null;
+  }
+  if (Number(user.is_admin) === 0 && isAdminEmail(user.email)) {
+    db.prepare("UPDATE users SET is_admin = 1 WHERE id = ?").run(user.id);
+    user.is_admin = 1;
+  }
   touchUser(user.id);
   return user;
+}
+
+function isAdminEmail(email: string | null) {
+  if (!email) return false;
+  const list = (process.env.FRIENDS_ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+  return list.includes(email.toLowerCase());
 }
 
 export function findUserById(id: string): UserRow | null {
@@ -177,6 +197,7 @@ export function toAuthUser(user: UserRow): AuthUser {
       | "telegram"
       | "qr"
       | "email",
+    isAdmin: Number(user.is_admin) !== 0,
   };
 }
 
@@ -210,10 +231,14 @@ export function createUser(input: RegisterInput): UserRow {
   const email = input.email?.trim().toLowerCase() || null;
   const id = uid("u");
   const now = Date.now();
+  const adminCount = db
+    .prepare("SELECT COUNT(*) AS n FROM users WHERE is_admin = 1 AND is_demo = 0")
+    .get() as { n: number };
+  const isAdmin = Number(adminCount.n) === 0 || isAdminEmail(email) ? 1 : 0;
   db.prepare(
     `INSERT INTO users
-      (id, name, username, email, password_hash, avatar, photo_url, cover_url, status, about, city, birthday, relationship, method, is_demo, online, created_at, last_seen)
-     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '', '', '', '', '', ?, 0, 1, ?, ?)`,
+      (id, name, username, email, password_hash, avatar, photo_url, cover_url, status, about, city, birthday, relationship, method, is_demo, is_admin, online, created_at, last_seen)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '', '', '', '', '', ?, 0, ?, 1, ?, ?)`,
   ).run(
     id,
     name,
@@ -223,6 +248,7 @@ export function createUser(input: RegisterInput): UserRow {
     input.avatar?.slice(0, 2).toUpperCase() || initials(name),
     input.photoUrl ?? null,
     input.method ?? "email",
+    isAdmin,
     now,
     now,
   );

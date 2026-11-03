@@ -13,6 +13,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ user });
   } catch (error) {
     const code = error instanceof Error ? error.message : "login_failed";
-    return NextResponse.json({ error: code }, { status: 401 });
+    return NextResponse.json({ error: code }, { status: code === "banned" ? 403 : 401 });
   }
 }

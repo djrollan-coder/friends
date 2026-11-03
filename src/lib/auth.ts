@@ -7,6 +7,7 @@ export type AuthUser = {
   photoUrl?: string;
   method: "telegram" | "qr" | "email";
   email?: string;
+  isAdmin?: boolean;
 };
 
 export function telegramLoginUrl(botId: string, origin: string) {

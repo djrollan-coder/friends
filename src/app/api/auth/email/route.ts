@@ -22,7 +22,13 @@ export async function POST(request: Request) {
   } catch (error) {
     const code = error instanceof Error ? error.message : "auth_failed";
     const status =
-      code === "exists" ? 409 : code === "invalid_credentials" ? 401 : 400;
+      code === "exists"
+        ? 409
+        : code === "registration_closed" || code === "banned"
+          ? 403
+          : code === "invalid_credentials"
+            ? 401
+            : 400;
     return NextResponse.json({ error: code }, { status });
   }
 }

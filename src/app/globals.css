@@ -5015,3 +5015,91 @@ html.is-native-ios body {
   font-weight: 700;
   color: var(--vk-accent, #c4784a);
 }
+
+/* Admin: real data lists */
+.admin-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 7px;
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+.admin-badge.ok { color: #86d4a4; background: #75c99b17; }
+.admin-badge.warn { color: #df9a6b; background: #c4784a1d; }
+.admin-badge.muted { color: #9a9ca1; background: #ffffff10; }
+.admin-list { margin-top: 14px; }
+.admin-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 2px;
+  border-top: 1px solid #ffffff0d;
+}
+.admin-row-main { display: flex; gap: 11px; min-width: 0; flex: 1; }
+.admin-row-avatar {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #f0d2bd;
+  background: linear-gradient(145deg, #5b3d2c, #2a211b);
+}
+.admin-row-main b { display: block; font-size: 11px; color: #e7e6e4; }
+.admin-row-main small { display: block; margin-top: 3px; font-size: 9px; color: #8d9096; }
+.admin-row-text {
+  margin: 6px 0 0;
+  font-size: 10px;
+  color: #a7a9ad;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.admin-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+}
+.admin-row-actions button {
+  border: 1px solid #ffffff1c;
+  background: #ffffff08;
+  color: #c9c8c5;
+  border-radius: 7px;
+  padding: 6px 9px;
+  font-size: 9px;
+  cursor: pointer;
+}
+.admin-row-actions button:hover { border-color: #c4784a; color: #fff; }
+.admin-row-actions button.danger { color: #e98c83; border-color: #e98c8340; }
+.admin-row-actions button:disabled { opacity: 0.45; cursor: default; }
+.admin-filter-row { display: flex; gap: 7px; margin-top: 10px; flex-wrap: wrap; }
+.admin-filter-row button {
+  border: 1px solid #ffffff1c;
+  background: transparent;
+  color: #a7a9ad;
+  border-radius: 20px;
+  padding: 5px 10px;
+  font-size: 9px;
+  cursor: pointer;
+}
+.admin-filter-row button.is-on { background: #c4784a22; border-color: #c4784a; color: #f0c8aa; }
+.admin-error {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid #e98c8340;
+  background: #e98c8312;
+  color: #e9a199;
+  font-size: 10px;
+}
+.admin-note { margin-top: 14px; font-size: 9px; color: #8e9095; line-height: 1.5; }
+.admin-empty-state .admin-primary { display: inline-block; text-decoration: none; }

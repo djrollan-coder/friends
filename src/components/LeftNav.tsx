@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { extraNav, navItems, shortcutLinks } from "@/data/mock";
 import { useI18n, useT } from "@/lib/i18n/I18nProvider";
 import { useUnreadBadges } from "@/lib/useBadges";
+import { useAuth } from "@/components/AuthProvider";
 import { NavIcon } from "./NavIcons";
 
 const STORAGE_KEY = "friends.nav.collapsed";
@@ -33,6 +34,7 @@ export function LeftNav() {
   const { tc } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
   const badges = useUnreadBadges();
+  const { user } = useAuth();
 
   useEffect(() => {
     try {
@@ -118,6 +120,14 @@ export function LeftNav() {
             </Link>
           );
         })}
+        {user?.isAdmin ? (
+          <Link href="/manage" title="Управление" className={pathname.startsWith("/manage") ? "active" : undefined}>
+            <span className="vk-nav-icon">
+              <NavIcon name="settings" />
+            </span>
+            {!collapsed ? <span className="vk-nav-label">Управление</span> : null}
+          </Link>
+        ) : null}
       </nav>
 
       {!collapsed ? (

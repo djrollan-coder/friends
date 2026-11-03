@@ -34,6 +34,8 @@ export type FeedPost = {
   attachment?: { name: string; size: string; type: "file" | "photo" };
   commentList?: FeedComment[];
   groupId?: string;
+  status?: "published" | "pending";
+  commentsEnabled?: boolean;
 };
 
 export type Person = UserDTO & {

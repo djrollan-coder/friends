@@ -3,6 +3,7 @@ import { findUserById } from "./auth";
 import { publishLive } from "./events";
 import { formatWhen, userDTO, type PostDTO, type UserDTO } from "./shared";
 import { notify } from "./social";
+import { getAppSettings } from "./appSettings";
 
 const VISIBILITY = `
   (
@@ -29,6 +30,7 @@ type FeedOptions = {
   groupId?: string;
   limit?: number;
   query?: string;
+  includePending?: boolean;
 };
 
 function parseAttachment(value: unknown): PostDTO["attachment"] | undefined {
@@ -80,7 +82,9 @@ export function listFeed(meId: string, options: FeedOptions = {}): PostDTO[] {
          EXISTS(SELECT 1 FROM bookmarks b WHERE b.post_id = p.id AND b.user_id = (SELECT id FROM me)) AS marked
        FROM posts p
        JOIN users u ON u.id = p.author_id
-       WHERE ${VISIBILITY} ${filters.join(" ")}
+       WHERE ${VISIBILITY}
+         ${options.includePending ? "" : "AND p.status = 'published'"}
+         ${filters.join(" ")}
        ORDER BY p.created_at DESC
        LIMIT ?`,
     )
@@ -160,6 +164,8 @@ export function listFeed(meId: string, options: FeedOptions = {}): PostDTO[] {
       attachment: parseAttachment(row.attachment),
       commentList: commentsByPost.get(String(row.id)) ?? [],
       groupId: (row.group_id as string) ?? undefined,
+      status: row.status === "pending" ? "pending" : "published",
+      commentsEnabled: Number(row.comments_enabled ?? 1) !== 0,
     };
   });
 }
@@ -183,11 +189,13 @@ export function createPost(
       .get(input.groupId, meId);
     if (!membership) throw new Error("not_a_member");
   }
+  const appSettings = getAppSettings();
+  const status = appSettings.premoderation ? "pending" : "published";
   const id = uid("p");
   const now = Date.now();
   db.prepare(
-    `INSERT INTO posts (id, author_id, group_id, text, image, video, attachment, repost_of, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+    `INSERT INTO posts (id, author_id, group_id, text, image, video, attachment, repost_of, status, comments_enabled, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
   ).run(
     id,
     meId,
@@ -196,10 +204,12 @@ export function createPost(
     input.image ?? null,
     input.video ?? null,
     input.attachment ? JSON.stringify(input.attachment) : null,
+    status,
+    appSettings.commentsClosed ? 0 : 1,
     now,
   );
   publishLive(null, { type: "post", postId: id });
-  return listFeed(meId, { limit: 60 }).find((p) => p.id === id) ?? null;
+  return listFeed(meId, { limit: 60, includePending: true }).find((p) => p.id === id) ?? null;
 }
 
 export function toggleLike(meId: string, postId: string) {
@@ -239,10 +249,11 @@ export function addComment(meId: string, postId: string, text: string) {
   const trimmed = text.trim();
   if (!trimmed) throw new Error("empty_comment");
   const db = getDb();
-  const post = db.prepare("SELECT author_id FROM posts WHERE id = ?").get(postId) as
+  const post = db.prepare("SELECT author_id, comments_enabled FROM posts WHERE id = ?").get(postId) as
     | Row
     | undefined;
   if (!post) throw new Error("post_not_found");
+  if (Number(post.comments_enabled ?? 1) === 0) throw new Error("comments_disabled");
   const id = uid("c");
   const now = Date.now();
   db.prepare(

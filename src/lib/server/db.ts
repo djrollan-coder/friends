@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { randomBytes, scryptSync } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -84,6 +85,8 @@ CREATE TABLE IF NOT EXISTS users (
   searchable    INTEGER NOT NULL DEFAULT 1,
   show_online   INTEGER NOT NULL DEFAULT 1,
   is_demo       INTEGER NOT NULL DEFAULT 0,
+  is_admin      INTEGER NOT NULL DEFAULT 0,
+  banned        INTEGER NOT NULL DEFAULT 0,
   online        INTEGER NOT NULL DEFAULT 0,
   created_at    INTEGER NOT NULL,
   last_seen     INTEGER NOT NULL
@@ -105,6 +108,8 @@ CREATE TABLE IF NOT EXISTS posts (
   video      TEXT,
   attachment TEXT,
   repost_of  TEXT,
+  status     TEXT NOT NULL DEFAULT 'published',
+  comments_enabled INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS posts_created ON posts(created_at DESC);
@@ -269,6 +274,22 @@ CREATE TABLE IF NOT EXISTS invites (
   uses_left  INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS reports (
+  id          TEXT PRIMARY KEY,
+  reporter_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  target_type TEXT NOT NULL,
+  target_id   TEXT NOT NULL,
+  reason      TEXT NOT NULL DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'open',
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS reports_status ON reports(status, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS notifications (
   id         TEXT PRIMARY KEY,
@@ -604,20 +625,86 @@ function seedMedia(db: DatabaseSync, userId: string, now: number) {
   }
 }
 
-function ensureColumns(db: DatabaseSync) {
-  const rows = db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+function addColumns(db: DatabaseSync, table: string, columns: Array<[string, string]>) {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
   const names = new Set(rows.map((row) => row.name));
-  const columns: Array<[string, string]> = [
+  for (const [name, definition] of columns) {
+    if (!names.has(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`);
+  }
+}
+
+function ensureColumns(db: DatabaseSync) {
+  addColumns(db, "users", [
     ["privacy_wall", "privacy_wall TEXT NOT NULL DEFAULT 'friends'"],
     ["privacy_messages", "privacy_messages TEXT NOT NULL DEFAULT 'friends'"],
     ["privacy_calls", "privacy_calls TEXT NOT NULL DEFAULT 'friends'"],
     ["searchable", "searchable INTEGER NOT NULL DEFAULT 1"],
     ["show_online", "show_online INTEGER NOT NULL DEFAULT 1"],
-  ];
-  for (const [name, definition] of columns) {
-    if (!names.has(name)) db.exec(`ALTER TABLE users ADD COLUMN ${definition}`);
-  }
+    ["is_admin", "is_admin INTEGER NOT NULL DEFAULT 0"],
+    ["banned", "banned INTEGER NOT NULL DEFAULT 0"],
+  ]);
+  addColumns(db, "posts", [
+    ["status", "status TEXT NOT NULL DEFAULT 'published'"],
+    ["comments_enabled", "comments_enabled INTEGER NOT NULL DEFAULT 1"],
+  ]);
   db.exec("UPDATE users SET privacy_wall = 'public' WHERE is_demo = 1");
+  db.exec("UPDATE posts SET status = 'published' WHERE status IS NULL OR status = ''");
+  ensureDefaultAdmin(db);
+  db.exec(
+    `INSERT OR IGNORE INTO app_settings (key, value) VALUES
+      ('registration', '1'), ('premoderation', '0'), ('comments_closed', '0')`,
+  );
+}
+
+function hashPasswordLocal(password: string) {
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(password, salt, 64).toString("hex");
+  return `scrypt:${salt}:${hash}`;
+}
+
+/** Built-in operator account for /manage — email/password match README. */
+function ensureDefaultAdmin(db: DatabaseSync) {
+  const email = "admin@friends.local";
+  const existing = db
+    .prepare("SELECT id, is_admin FROM users WHERE lower(email) = lower(?)")
+    .get(email) as { id: string; is_admin: number } | undefined;
+  if (existing) {
+    db.prepare(
+      "UPDATE users SET is_admin = 1, banned = 0, password_hash = ?, method = 'email' WHERE id = ?",
+    ).run(hashPasswordLocal("secret123"), existing.id);
+    return;
+  }
+
+  const now = Date.now();
+  const id = "u_admin_default";
+  const name = "Админ Friends";
+  const usernameTaken = db.prepare("SELECT id FROM users WHERE username = ?").get("admin");
+  db.prepare(
+    `INSERT INTO users
+      (id, name, username, email, password_hash, avatar, photo_url, cover_url, status, about, city, birthday, relationship, method, is_demo, is_admin, online, created_at, last_seen)
+     VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, '', '', '', '', '', 'email', 0, 1, 1, ?, ?)`,
+  ).run(
+    id,
+    name,
+    usernameTaken ? null : "admin",
+    email,
+    hashPasswordLocal("secret123"),
+    "АF",
+    now,
+    now,
+  );
+
+  const admins = db
+    .prepare("SELECT COUNT(*) AS n FROM users WHERE is_admin = 1 AND is_demo = 0")
+    .get() as { n: number };
+  if (Number(admins.n) === 0) {
+    const oldest = db
+      .prepare("SELECT id FROM users WHERE is_demo = 0 ORDER BY created_at ASC LIMIT 1")
+      .get() as { id: string } | undefined;
+    if (oldest) {
+      db.prepare("UPDATE users SET is_admin = 1 WHERE id = ?").run(oldest.id);
+    }
+  }
 }
 
 export function getDb(): DatabaseSync {

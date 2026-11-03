@@ -38,6 +38,8 @@ export type PostDTO = {
   attachment?: { name: string; size: string; type: "file" | "photo" };
   commentList: CommentDTO[];
   groupId?: string;
+  status?: "published" | "pending";
+  commentsEnabled?: boolean;
 };
 
 export type GroupDTO = {
