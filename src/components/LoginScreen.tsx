@@ -29,6 +29,27 @@ type BotLoginUi = {
   sessionToken: string;
 };
 
+const TG_PENDING_KEY = "friends.tg.pendingSession";
+
+function readPendingSession() {
+  if (typeof window === "undefined") return null;
+  try {
+    return sessionStorage.getItem(TG_PENDING_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writePendingSession(token: string | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (!token) sessionStorage.removeItem(TG_PENDING_KEY);
+    else sessionStorage.setItem(TG_PENDING_KEY, token);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function LoginScreen() {
   const { login } = useAuth();
   const t = useT();
@@ -38,6 +59,7 @@ export function LoginScreen() {
   const [qrStatus, setQrStatus] = useState<"loading" | "pending" | "confirmed" | "expired" | "error">("loading");
   const [tgBusy, setTgBusy] = useState(false);
   const [tgWaiting, setTgWaiting] = useState(false);
+  const [pendingToken, setPendingToken] = useState<string | null>(null);
   const [tgConfig, setTgConfig] = useState<TgConfig | null>(null);
   const [botLogin, setBotLogin] = useState<BotLoginUi | null>(null);
   const [tgError, setTgError] = useState("");
@@ -47,11 +69,39 @@ export function LoginScreen() {
   const [password, setPassword] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailError, setEmailError] = useState("");
+  const [pollTick, setPollTick] = useState(0);
 
   const refreshBotLogin = useCallback(async () => {
     const botRes = await fetch("/api/auth/telegram/bot-login?session=1");
     if (!botRes.ok) throw new Error("bot_login_failed");
     return (await botRes.json()) as BotLoginUi;
+  }, []);
+
+  const finishTelegramLogin = useCallback(
+    (user: { id: string; name: string; username?: string; avatar: string; photoUrl?: string }) => {
+      writePendingSession(null);
+      setPendingToken(null);
+      setTgWaiting(false);
+      setTgBusy(false);
+      login({
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        avatar: user.avatar,
+        photoUrl: user.photoUrl,
+        method: "telegram",
+      });
+    },
+    [login],
+  );
+
+  useEffect(() => {
+    const pending = readPendingSession();
+    if (pending) {
+      setPendingToken(pending);
+      setTgWaiting(true);
+      setTab("telegram");
+    }
   }, []);
 
   useEffect(() => {
@@ -76,25 +126,39 @@ export function LoginScreen() {
     };
   }, [refreshBotLogin]);
 
+  // Resume polling when returning from Telegram (iOS suspends timers in background).
   useEffect(() => {
-    if (!tgWaiting || !botLogin?.sessionToken) return;
+    const bump = () => setPollTick((n) => n + 1);
+    const onVis = () => {
+      if (document.visibilityState === "visible") bump();
+    };
+    window.addEventListener("focus", bump);
+    window.addEventListener("pageshow", bump);
+    document.addEventListener("visibilitychange", onVis);
+    (window as Window & { __FRIENDS_RESUME_AUTH__?: () => void }).__FRIENDS_RESUME_AUTH__ = bump;
+    return () => {
+      window.removeEventListener("focus", bump);
+      window.removeEventListener("pageshow", bump);
+      document.removeEventListener("visibilitychange", onVis);
+      delete (window as Window & { __FRIENDS_RESUME_AUTH__?: () => void }).__FRIENDS_RESUME_AUTH__;
+    };
+  }, []);
 
-    const timer = setInterval(async () => {
+  useEffect(() => {
+    const token = pendingToken || botLogin?.sessionToken;
+    if (!tgWaiting || !token) return;
+
+    let stopped = false;
+    const check = async () => {
       try {
-        const res = await fetch(`/api/auth/telegram/bot-session/${botLogin.sessionToken}`);
-        if (!res.ok) return;
+        const res = await fetch(`/api/auth/telegram/bot-session/${token}`);
+        if (!res.ok || stopped) return;
         const data = await res.json();
         if (data.status === "confirmed" && data.user) {
-          setTgWaiting(false);
-          setTgBusy(false);
-          login({
-            id: data.user.id,
-            name: data.user.name,
-            username: data.user.username,
-            avatar: data.user.avatar,
-            method: "telegram",
-          });
+          finishTelegramLogin(data.user);
         } else if (data.status === "expired") {
+          writePendingSession(null);
+          setPendingToken(null);
           setTgWaiting(false);
           setTgBusy(false);
           setTgError(t("login.telegramSessionExpired"));
@@ -102,10 +166,15 @@ export function LoginScreen() {
       } catch {
         /* ignore transient errors */
       }
-    }, 1500);
+    };
 
-    return () => clearInterval(timer);
-  }, [tgWaiting, botLogin, login, t]);
+    void check();
+    const timer = setInterval(() => void check(), 1200);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [tgWaiting, pendingToken, botLogin, finishTelegramLogin, t, pollTick]);
 
   const startQr = useCallback(async () => {
     setQrStatus("loading");
@@ -175,6 +244,8 @@ export function LoginScreen() {
     try {
       const session = await refreshBotLogin();
       setBotLogin(session);
+      writePendingSession(session.sessionToken);
+      setPendingToken(session.sessionToken);
       setTgWaiting(true);
 
       const native = (window as Window & {
@@ -191,6 +262,8 @@ export function LoginScreen() {
       // Browser: open Telegram in a new tab/app, stay on login and poll.
       window.open(session.deepLink, "_blank", "noopener,noreferrer");
     } catch {
+      writePendingSession(null);
+      setPendingToken(null);
       setTgWaiting(false);
       setTgError(t("login.telegramNotConfigured"));
     } finally {

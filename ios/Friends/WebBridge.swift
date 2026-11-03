@@ -21,6 +21,22 @@ final class FriendsWebBridge: ObservableObject {
         webView.load(URLRequest(url: url))
     }
 
+    /// JS timers pause while Telegram is open — kick auth poll when app is foregrounded.
+    func resumeAuthPoll() {
+        webView?.evaluateJavaScript(
+            """
+            try {
+              if (typeof window.__FRIENDS_RESUME_AUTH__ === 'function') {
+                window.__FRIENDS_RESUME_AUTH__();
+              }
+              document.dispatchEvent(new Event('visibilitychange'));
+              window.dispatchEvent(new Event('focus'));
+            } catch (e) {}
+            """,
+            completionHandler: nil
+        )
+    }
+
     func handleIncomingURL(_ url: URL) {
         guard isAppHost(url) || url.scheme == "friends" else { return }
         if url.scheme == "friends" {
