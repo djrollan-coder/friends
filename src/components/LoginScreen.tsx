@@ -49,7 +49,7 @@ function writePendingSession(token: string | null) {
 }
 
 export function LoginScreen() {
-  const { login } = useAuth();
+  const { login, refresh } = useAuth();
   const t = useT();
   const [tab, setTab] = useState<Tab>("email");
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -75,7 +75,7 @@ export function LoginScreen() {
   }, []);
 
   const finishTelegramLogin = useCallback(
-    (user: { id: string; name: string; username?: string; avatar: string; photoUrl?: string }) => {
+    async (user: { id: string; name: string; username?: string; avatar: string; photoUrl?: string }) => {
       writePendingSession(null);
       setPendingToken(null);
       setTgWaiting(false);
@@ -88,8 +88,20 @@ export function LoginScreen() {
         photoUrl: user.photoUrl,
         method: "telegram",
       });
+      // Prefer cookie session from /api/auth/me after Set-Cookie.
+      const synced = await refresh();
+      if (!synced) {
+        login({
+          id: user.id,
+          name: user.name,
+          username: user.username,
+          avatar: user.avatar,
+          photoUrl: user.photoUrl,
+          method: "telegram",
+        });
+      }
     },
-    [login],
+    [login, refresh],
   );
 
   useEffect(() => {
@@ -148,11 +160,14 @@ export function LoginScreen() {
     let stopped = false;
     const check = async () => {
       try {
-        const res = await fetch(`/api/auth/telegram/bot-session/${token}`);
+        const res = await fetch(`/api/auth/telegram/bot-session/${token}`, {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
         if (!res.ok || stopped) return;
         const data = await res.json();
         if (data.status === "confirmed" && data.user) {
-          finishTelegramLogin(data.user);
+          await finishTelegramLogin(data.user);
         } else if (data.status === "expired") {
           writePendingSession(null);
           setPendingToken(null);

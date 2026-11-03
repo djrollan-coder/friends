@@ -281,6 +281,14 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS notifications_user ON notifications(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS tg_login_sessions (
+  token      TEXT PRIMARY KEY,
+  status     TEXT NOT NULL,
+  user_json  TEXT,
+  created_at INTEGER NOT NULL,
+  claimed_at INTEGER
+);
 `;
 
 const DEMO_USERS: Array<{

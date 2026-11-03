@@ -52,7 +52,7 @@ function finishLogin(user: AuthUser, login: (u: AuthUser) => void) {
 
 function TelegramCallbackInner() {
   const params = useSearchParams();
-  const { login } = useAuth();
+  const { login, refresh } = useAuth();
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -65,6 +65,7 @@ function TelegramCallbackInner() {
           const res = await fetch("/api/auth/telegram/exchange", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
             body: JSON.stringify({ t: botToken }),
           });
           const data = await res.json();
@@ -72,7 +73,11 @@ function TelegramCallbackInner() {
             if (!cancelled) setError(data.error ?? "invalid_token");
             return;
           }
-          if (!cancelled) finishLogin(data.user as AuthUser, login);
+          if (!cancelled) {
+            login(data.user as AuthUser);
+            await refresh();
+            finishLogin(data.user as AuthUser, login);
+          }
           return;
         }
 
@@ -85,6 +90,7 @@ function TelegramCallbackInner() {
         const res = await fetch("/api/auth/telegram", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
           body: JSON.stringify(payload),
         });
         const data = await res.json();
@@ -92,7 +98,11 @@ function TelegramCallbackInner() {
           if (!cancelled) setError(data.error ?? "invalid_telegram");
           return;
         }
-        if (!cancelled) finishLogin(data.user as AuthUser, login);
+        if (!cancelled) {
+          login(data.user as AuthUser);
+          await refresh();
+          finishLogin(data.user as AuthUser, login);
+        }
       } catch {
         if (!cancelled) setError("network");
       }
@@ -101,7 +111,7 @@ function TelegramCallbackInner() {
     return () => {
       cancelled = true;
     };
-  }, [params, login]);
+  }, [params, login, refresh]);
 
   return (
     <div className="auth-page">

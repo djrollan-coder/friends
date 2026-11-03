@@ -66,6 +66,16 @@ function isSecureRequest(request?: Request) {
   }
 }
 
+export function sessionCookieOptions(request?: Request) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: Math.floor(SESSION_TTL_MS / 1000),
+    secure: isSecureRequest(request),
+  };
+}
+
 export async function createSession(userId: string, request?: Request) {
   const db = getDb();
   const token = randomBytes(32).toString("base64url");
@@ -73,15 +83,21 @@ export async function createSession(userId: string, request?: Request) {
   db.prepare(
     "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
   ).run(token, userId, now, now + SESSION_TTL_MS);
-  const store = await cookies();
-  store.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: Math.floor(SESSION_TTL_MS / 1000),
-    secure: isSecureRequest(request),
-  });
+  try {
+    const store = await cookies();
+    store.set(SESSION_COOKIE, token, sessionCookieOptions(request));
+  } catch {
+    /* Route handlers should also call applySessionCookie on the response */
+  }
   return token;
+}
+
+export function applySessionCookie(
+  response: { cookies: { set: (name: string, value: string, options: object) => void } },
+  token: string,
+  request?: Request,
+) {
+  response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(request));
 }
 
 export async function destroySession() {
@@ -221,29 +237,41 @@ export function findOrCreateTelegramUser(payload: {
   username?: string;
   photoUrl?: string;
 }): UserRow {
-  const existingUsername = payload.username
-    ? (getDb()
-        .prepare("SELECT * FROM users WHERE username = ? AND method = 'telegram'")
-        .get(payload.username) as Row | undefined)
-    : undefined;
-  if (existingUsername) return existingUsername as unknown as UserRow;
+  const db = getDb();
+  const tgId = String(payload.id).replace(/^tg-/, "");
+  const syntheticEmail = `tg-${tgId}@telegram.local`;
 
-  const syntheticEmail = `tg-${payload.id}@telegram.local`;
-  const existing = findUserByEmail(syntheticEmail);
-  if (existing) {
-    if (payload.photoUrl && payload.photoUrl !== existing.photo_url) {
-      getDb()
-        .prepare("UPDATE users SET photo_url = ?, name = ? WHERE id = ?")
-        .run(payload.photoUrl, payload.name, existing.id);
-    }
-    return findUserById(existing.id)!;
+  const byEmail = findUserByEmail(syntheticEmail);
+  if (byEmail) {
+    db.prepare(
+      "UPDATE users SET name = ?, photo_url = COALESCE(?, photo_url), last_seen = ?, online = 1 WHERE id = ?",
+    ).run(payload.name, payload.photoUrl ?? null, Date.now(), byEmail.id);
+    return findUserById(byEmail.id)!;
   }
+
+  if (payload.username) {
+    const byTgUsername = db
+      .prepare("SELECT * FROM users WHERE username = ? AND method = 'telegram'")
+      .get(payload.username) as Row | undefined;
+    if (byTgUsername) return byTgUsername as unknown as UserRow;
+  }
+
+  // Avoid UNIQUE collisions with demo / email accounts that already took the handle.
+  let username: string | undefined = payload.username?.trim() || undefined;
+  if (username) {
+    const taken = db.prepare("SELECT id FROM users WHERE username = ?").get(username);
+    if (taken) username = `tg_${tgId}`;
+  } else {
+    username = `tg_${tgId}`;
+  }
+  const takenAlias = db.prepare("SELECT id FROM users WHERE username = ?").get(username);
+  if (takenAlias) username = undefined;
 
   return createUser({
     name: payload.name,
     email: syntheticEmail,
     method: "telegram",
-    username: payload.username,
+    username,
     avatar: initials(payload.name),
     photoUrl: payload.photoUrl,
   });
