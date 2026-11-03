@@ -6,22 +6,32 @@ struct RootView: View {
     @ObservedObject private var bridge = FriendsWebBridge.shared
 
     var body: some View {
-        FriendsWebContainer()
-            .ignoresSafeArea()
-            .background(Color.black)
-            .onOpenURL { url in
+        // Capture real safe-area BEFORE full-bleed WebView zeros them.
+        GeometryReader { geo in
+            FriendsWebContainer()
+                .ignoresSafeArea()
+                .onAppear {
+                    bridge.updateWindowSafeArea(geo.safeAreaInsets)
+                }
+                .onChange(of: geo.safeAreaInsets) { _, insets in
+                    bridge.updateWindowSafeArea(insets)
+                }
+        }
+        .background(Color.black)
+        .ignoresSafeArea()
+        .onOpenURL { url in
+            bridge.handleIncomingURL(url)
+        }
+        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+            if let url = activity.webpageURL {
                 bridge.handleIncomingURL(url)
             }
-            .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
-                if let url = activity.webpageURL {
-                    bridge.handleIncomingURL(url)
-                }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                bridge.resumeAuthPoll()
             }
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active {
-                    bridge.resumeAuthPoll()
-                }
-            }
+        }
     }
 }
 
@@ -35,15 +45,22 @@ private struct FriendsWebContainer: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let userContent = WKUserContentController()
         userContent.add(context.coordinator, name: "friends")
-        // iPhone 17 Pro defaults until real safeAreaInsets arrive
+        // iPhone 17 Pro / Dynamic Island defaults until measured insets arrive
         let boot = WKUserScript(
             source: """
             window.__FRIENDS_NATIVE__=true;
-            document.documentElement.classList.add('is-native-ios');
-            document.documentElement.style.setProperty('--sat','59px');
-            document.documentElement.style.setProperty('--sab','34px');
-            document.documentElement.style.setProperty('--sal','0px');
-            document.documentElement.style.setProperty('--sar','0px');
+            (function(){
+              var r=document.documentElement;
+              r.classList.add('is-native-ios');
+              r.style.setProperty('--sat','62px');
+              r.style.setProperty('--sab','34px');
+              r.style.setProperty('--sal','0px');
+              r.style.setProperty('--sar','0px');
+              r.style.setProperty('--safe-top','62px');
+              r.style.setProperty('--safe-bottom','34px');
+              r.style.setProperty('--safe-left','0px');
+              r.style.setProperty('--safe-right','0px');
+            })();
             """,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true

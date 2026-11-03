@@ -329,6 +329,22 @@ select:-webkit-autofill {
   z-index: 50;
 }
 
+/* Native iOS: solid bar under Dynamic Island, content clearly below it */
+html.is-native-ios {
+  --safe-top: max(var(--sat, 62px), env(safe-area-inset-top, 62px), 62px);
+  --safe-bottom: max(var(--sab, 34px), env(safe-area-inset-bottom, 34px), 34px);
+}
+
+html.is-native-ios .vk-header {
+  background: #0a0c0e;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+  /* Extra 2px so search/icons never kiss the island */
+  padding-top: calc(var(--safe-top) + 2px);
+  min-height: calc(var(--header-bar) + var(--safe-top) + 2px);
+}
+
 .vk-header-inner {
   width: min(var(--vk-width), 100%);
   margin: 0 auto;
@@ -4721,17 +4737,13 @@ button.interest-chip {
   }
 }
 
-/* Native iOS shell — rounder chrome around Dynamic Island */
-html.is-native-ios .vk-header {
-  background: rgba(10, 12, 14, 0.88);
-}
-
 html.is-native-ios .mobile-bottom-nav {
-  background: rgba(8, 10, 12, 0.96);
+  background: #080a0c;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 html.is-native-ios body {
-  /* Prefer the Pro display’s taller viewport */
   min-height: 100dvh;
   min-height: -webkit-fill-available;
 }
