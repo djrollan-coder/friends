@@ -34,7 +34,9 @@ npm run build && npm run start
 
 ## Аккаунты
 
-- Вход по email + паролю (пароли хешируются scrypt, сессия в httpOnly-cookie).
+- Вход по email: код + magic link из письма (Resend). Код хранится как HMAC, TTL 10 мин,
+  лимит попыток и rate-limit по email/IP. Пароль остаётся запасным способом.
+- Пароли (если заданы) хешируются scrypt, сессия — httpOnly-cookie (подписанный portable token).
 - Вход через Telegram (Login Widget и бот, если заданы env-переменные).
 - Вход по QR: телефон подтверждает сессию, десктоп получает cookie.
 - Новому аккаунту автоматически подставляются демо-друзья и контент, чтобы
@@ -73,6 +75,9 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=      # Google Drive backup (optional)
 NEXT_PUBLIC_SITE_URL=              # public origin for Telegram deep links
 FRIENDS_DATA_DIR=                  # optional persistent data directory
 FRIENDS_ADMIN_EMAILS=              # comma-separated admin emails
+RESEND_API_KEY=                    # Resend for email login codes
+RESEND_FROM_EMAIL=Friends <onboarding@resend.dev>
+FRIENDS_SESSION_SECRET=            # HMAC for sessions + email OTPs
 ```
 
 ## Основные API

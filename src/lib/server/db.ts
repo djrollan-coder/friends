@@ -310,6 +310,26 @@ CREATE TABLE IF NOT EXISTS tg_login_sessions (
   created_at INTEGER NOT NULL,
   claimed_at INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS email_login_codes (
+  id          TEXT PRIMARY KEY,
+  email       TEXT NOT NULL,
+  code_hash   TEXT NOT NULL,
+  magic_hash  TEXT NOT NULL,
+  name        TEXT,
+  purpose     TEXT NOT NULL,
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL,
+  expires_at  INTEGER NOT NULL,
+  consumed_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS email_login_codes_email ON email_login_codes(email, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS auth_rate_limits (
+  key          TEXT PRIMARY KEY,
+  count        INTEGER NOT NULL,
+  window_start INTEGER NOT NULL
+);
 `;
 
 const DEMO_USERS: Array<{

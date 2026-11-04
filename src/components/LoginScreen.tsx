@@ -64,6 +64,8 @@ export function LoginScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [emailCode, setEmailCode] = useState("");
+  const [emailStep, setEmailStep] = useState<"request" | "code" | "password">("request");
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [pollTick, setPollTick] = useState(0);
@@ -269,7 +271,77 @@ export function LoginScreen() {
     }
   }
 
-  async function loginEmail(e: FormEvent) {
+  function mapEmailError(code: string) {
+    if (code === "invalid_email") return t("login.invalidEmail");
+    if (code === "weak_password") return t("login.weakPassword");
+    if (code === "weak_name") return t("login.weakName");
+    if (code === "need_name") return t("login.needName");
+    if (code === "exists") return t("login.exists");
+    if (code === "invalid_credentials") return t("login.loginFail");
+    if (code === "invalid_code") return t("login.invalidCode");
+    if (code === "code_expired") return t("login.codeExpired");
+    if (code === "code_locked") return t("login.codeLocked");
+    if (code === "rate_limited") return t("login.rateLimited");
+    if (code === "email_not_configured") return t("login.emailNotConfigured");
+    if (code === "email_send_failed") return t("login.emailSendFail");
+    if (code === "registration_closed") return t("login.registrationClosed");
+    if (code === "banned") return t("login.banned");
+    return mode === "register" ? t("login.registerFail") : t("login.loginFail");
+  }
+
+  async function requestEmailCode() {
+    setEmailError("");
+    setEmailBusy(true);
+    try {
+      const res = await fetch("/api/auth/email/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          name: mode === "register" ? name : undefined,
+          mode,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEmailError(mapEmailError(data.error ?? "email_start_failed"));
+        return;
+      }
+      setEmailCode("");
+      setEmailStep("code");
+    } catch {
+      setEmailError(t("login.network"));
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
+  async function verifyEmailCode(e: FormEvent) {
+    e.preventDefault();
+    setEmailError("");
+    setEmailBusy(true);
+    try {
+      const res = await fetch("/api/auth/email/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ email, code: emailCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEmailError(mapEmailError(data.error ?? "invalid_code"));
+        return;
+      }
+      login(data.user);
+      await refresh();
+    } catch {
+      setEmailError(t("login.network"));
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
+  async function loginEmailPassword(e: FormEvent) {
     e.preventDefault();
     setEmailError("");
     setEmailBusy(true);
@@ -284,15 +356,7 @@ export function LoginScreen() {
       );
       const data = await res.json();
       if (!res.ok) {
-        if (data.error === "invalid_email") setEmailError(t("login.invalidEmail"));
-        else if (data.error === "weak_password") setEmailError(t("login.weakPassword"));
-        else if (data.error === "weak_name") setEmailError(t("login.weakName"));
-        else if (data.error === "exists") setEmailError(t("login.exists"));
-        else if (data.error === "invalid_credentials") setEmailError(t("login.loginFail"));
-        else if (data.error === "registration_closed")
-          setEmailError("Регистрация сейчас закрыта администратором");
-        else if (data.error === "banned") setEmailError("Аккаунт заблокирован администратором");
-        else setEmailError(mode === "register" ? t("login.registerFail") : t("login.loginFail"));
+        setEmailError(mapEmailError(data.error ?? "login_failed"));
         return;
       }
       login(data.user);
@@ -342,69 +406,143 @@ export function LoginScreen() {
         </div>
 
         {tab === "email" ? (
-          <form className="auth-panel" onSubmit={loginEmail}>
+          <form
+            className="auth-panel"
+            onSubmit={
+              emailStep === "code"
+                ? verifyEmailCode
+                : emailStep === "password"
+                  ? loginEmailPassword
+                  : (e) => {
+                      e.preventDefault();
+                      void requestEmailCode();
+                    }
+            }
+          >
             <p className="auth-text">
-              {mode === "register" ? t("login.registerHint") : t("login.loginHint")}
+              {emailStep === "code"
+                ? t("login.codeHint")
+                : emailStep === "password"
+                  ? mode === "register"
+                    ? t("login.registerHint")
+                    : t("login.loginHint")
+                  : t("login.emailCodeHint")}
             </p>
-            {mode === "register" ? (
-              <>
-                <label className="auth-field">
-                  <span>{t("login.nameLabel")}</span>
-                  <input
-                    type="text"
-                    autoComplete="name"
-                    placeholder="Роман Моторный"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                  />
-                </label>
-              </>
+            {emailStep !== "code" && mode === "register" ? (
+              <label className="auth-field">
+                <span>{t("login.nameLabel")}</span>
+                <input
+                  type="text"
+                  autoComplete="name"
+                  placeholder="Роман Моторный"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required={mode === "register"}
+                />
+              </label>
             ) : null}
-            <label className="auth-field">
-              <span>Email</span>
-              <input
-                type="email"
-                autoComplete="email"
-                placeholder="name@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </label>
-            <label className="auth-field">
-              <span>{t("login.password")}</span>
-              <input
-                type="password"
-                autoComplete={mode === "register" ? "new-password" : "current-password"}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-              />
-            </label>
+            {emailStep !== "code" ? (
+              <label className="auth-field">
+                <span>Email</span>
+                <input
+                  type="email"
+                  autoComplete="email"
+                  placeholder="name@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </label>
+            ) : (
+              <div className="auth-muted" style={{ marginBottom: 10 }}>
+                {email}
+              </div>
+            )}
+            {emailStep === "code" ? (
+              <label className="auth-field">
+                <span>{t("login.codeLabel")}</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="123456"
+                  value={emailCode}
+                  onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  required
+                  minLength={6}
+                  maxLength={6}
+                />
+              </label>
+            ) : null}
+            {emailStep === "password" ? (
+              <label className="auth-field">
+                <span>{t("login.password")}</span>
+                <input
+                  type="password"
+                  autoComplete={mode === "register" ? "new-password" : "current-password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+              </label>
+            ) : null}
             {emailError ? <div className="auth-error">{emailError}</div> : null}
             <button type="submit" className="auth-primary-btn" disabled={emailBusy}>
               {emailBusy
-                ? mode === "register"
-                  ? t("login.creating")
-                  : t("login.signingIn")
-                : mode === "register"
-                  ? t("login.register")
-                  : t("login.signIn")}
+                ? emailStep === "code" || emailStep === "password"
+                  ? t("login.signingIn")
+                  : t("login.sendingCode")
+                : emailStep === "code"
+                  ? t("login.signIn")
+                  : emailStep === "password"
+                    ? mode === "register"
+                      ? t("login.register")
+                      : t("login.signIn")
+                    : t("login.sendCode")}
             </button>
+            {emailStep === "code" ? (
+              <button
+                type="button"
+                className="auth-link-btn"
+                style={{ marginTop: 12 }}
+                disabled={emailBusy}
+                onClick={() => {
+                  void requestEmailCode();
+                }}
+              >
+                {t("login.resendCode")}
+              </button>
+            ) : null}
             <button
               type="button"
               className="auth-link-btn"
               style={{ marginTop: 12 }}
               onClick={() => {
-                setMode((m) => (m === "login" ? "register" : "login"));
                 setEmailError("");
+                if (emailStep === "password") setEmailStep("request");
+                else if (emailStep === "code") {
+                  setEmailStep("request");
+                  setEmailCode("");
+                } else setEmailStep("password");
               }}
             >
-              {mode === "login" ? t("login.noAccount") : t("login.hasAccount")}
+              {emailStep === "password" ? t("login.useEmailCode") : t("login.usePassword")}
             </button>
+            {emailStep !== "code" ? (
+              <button
+                type="button"
+                className="auth-link-btn"
+                style={{ marginTop: 8 }}
+                onClick={() => {
+                  setMode((m) => (m === "login" ? "register" : "login"));
+                  setEmailError("");
+                }}
+              >
+                {mode === "login" ? t("login.noAccount") : t("login.hasAccount")}
+              </button>
+            ) : null}
           </form>
         ) : null}
 
