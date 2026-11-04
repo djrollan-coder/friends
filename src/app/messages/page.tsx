@@ -126,7 +126,7 @@ export default function MessagesPage() {
   }
 
   return (
-    <div className="vk-card vk-main-pad">
+    <div className="vk-card vk-main-pad messages-page">
       <div className="messages-head">
         <h1 className="vk-page-title">{t("messages.title")}</h1>
       </div>
@@ -215,7 +215,7 @@ export default function MessagesPage() {
         </div>
       ) : null}
 
-      <div className="vk-list">
+      <div className="vk-list messages-list">
         {dms.map((thread) => (
           <ThreadRow
             key={thread.id}

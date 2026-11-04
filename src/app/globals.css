@@ -1715,6 +1715,44 @@ html.is-native-ios.is-native-safe-inset .vk-page.has-mobile-nav {
   }
 }
 
+.messages-page.vk-card {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.messages-list {
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.messages-list .messages-row-wrap {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.messages-list .messages-row-wrap:last-child {
+  border-bottom: 0;
+}
+
+.messages-list .vk-list-row {
+  border-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.messages-page .messages-head,
+.messages-page .messages-groups-row,
+.messages-page .group-create {
+  margin-left: 4px;
+  margin-right: 4px;
+}
+
 .messages-head {
   display: flex;
   align-items: center;
