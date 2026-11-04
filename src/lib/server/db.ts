@@ -347,8 +347,12 @@ function hoursAgo(h: number) {
 }
 
 function seedBase(db: DatabaseSync) {
-  const count = db.prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number };
-  if (Number(count.n) > 0) return;
+  // Do not key off total users — ensureDefaultAdmin may already exist and would
+  // skip demos, then seedNewUserWorld fails on missing friend FKs (Telegram login).
+  const demos = db.prepare("SELECT COUNT(*) AS n FROM users WHERE is_demo = 1").get() as {
+    n: number;
+  };
+  if (Number(demos.n) > 0) return;
 
   const now = Date.now();
   db.exec("BEGIN");
@@ -649,7 +653,6 @@ function ensureColumns(db: DatabaseSync) {
   ]);
   db.exec("UPDATE users SET privacy_wall = 'public' WHERE is_demo = 1");
   db.exec("UPDATE posts SET status = 'published' WHERE status IS NULL OR status = ''");
-  ensureDefaultAdmin(db);
   db.exec(
     `INSERT OR IGNORE INTO app_settings (key, value) VALUES
       ('registration', '1'), ('premoderation', '0'), ('comments_closed', '0')`,
@@ -669,9 +672,9 @@ function ensureDefaultAdmin(db: DatabaseSync) {
     .prepare("SELECT id, is_admin FROM users WHERE lower(email) = lower(?)")
     .get(email) as { id: string; is_admin: number } | undefined;
   if (existing) {
-    db.prepare(
-      "UPDATE users SET is_admin = 1, banned = 0, password_hash = ?, method = 'email' WHERE id = ?",
-    ).run(hashPasswordLocal("secret123"), existing.id);
+    if (Number(existing.is_admin) === 0) {
+      db.prepare("UPDATE users SET is_admin = 1, banned = 0 WHERE id = ?").run(existing.id);
+    }
     return;
   }
 
@@ -715,6 +718,7 @@ export function getDb(): DatabaseSync {
   db.exec(SCHEMA);
   ensureColumns(db);
   seedBase(db);
+  ensureDefaultAdmin(db);
   const missingMedia = db
     .prepare(
       "SELECT id FROM users WHERE is_demo = 0 AND id NOT IN (SELECT DISTINCT user_id FROM albums)",

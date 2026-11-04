@@ -125,14 +125,19 @@ export async function createTelegramLoginSession(): Promise<TelegramLoginSession
 export async function getTelegramLoginSession(token: string) {
   if (!TOKEN_RE.test(token)) return null;
   const fromDb = readDb(token);
-  if (fromDb) return fromDb;
   const remote = await cacheGet(token);
-  if (!remote) return null;
-  if (Date.now() - remote.createdAt > TTL_MS) {
+  if (remote && Date.now() - remote.createdAt > TTL_MS) {
     remote.status = "expired";
   }
-  writeDb(remote);
-  return remote;
+
+  // Prefer confirmed (or newer) cache over a stale local pending row — serverless
+  // instances each have their own SQLite file.
+  if (remote && (!fromDb || remote.status === "confirmed" || remote.createdAt >= fromDb.createdAt)) {
+    writeDb(remote);
+    return remote;
+  }
+  if (fromDb) return fromDb;
+  return null;
 }
 
 export async function confirmTelegramLoginSession(token: string, user: AuthUser) {

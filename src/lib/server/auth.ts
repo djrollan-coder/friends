@@ -1,10 +1,99 @@
 import { cookies } from "next/headers";
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import {
+  createHmac,
+  randomBytes,
+  scryptSync,
+  timingSafeEqual,
+} from "node:crypto";
 import { getDb, seedNewUserWorld, uid, type Row } from "./db";
 
 export const SESSION_COOKIE = "friends_session";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const ONLINE_WINDOW_MS = 2 * 60 * 1000;
+
+type PortableSession = {
+  v: 1;
+  uid: string;
+  exp: number;
+  name: string;
+  avatar: string;
+  method: string;
+  email?: string | null;
+  username?: string | null;
+  photoUrl?: string | null;
+  isAdmin?: number;
+};
+
+function sessionSecret() {
+  return (
+    process.env.FRIENDS_SESSION_SECRET?.trim() ||
+    process.env.TELEGRAM_BOT_TOKEN?.trim() ||
+    "friends-dev-session-secret"
+  );
+}
+
+function signPortableSession(payload: PortableSession) {
+  const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  const sig = createHmac("sha256", sessionSecret()).update(body).digest("base64url");
+  return `s1.${body}.${sig}`;
+}
+
+function verifyPortableSession(token: string): PortableSession | null {
+  if (!token.startsWith("s1.")) return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [, body, sig] = parts;
+  const expected = createHmac("sha256", sessionSecret()).update(body).digest("base64url");
+  try {
+    const a = Buffer.from(expected, "utf8");
+    const b = Buffer.from(sig, "utf8");
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  } catch {
+    return null;
+  }
+  try {
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as PortableSession;
+    if (payload?.v !== 1 || !payload.uid || !payload.exp || !payload.name) return null;
+    if (payload.exp < Date.now()) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function upsertUserFromPortable(payload: PortableSession): UserRow {
+  const db = getDb();
+  const existing = findUserById(payload.uid);
+  if (existing) {
+    db.prepare(
+      "UPDATE users SET name = ?, avatar = ?, photo_url = COALESCE(?, photo_url), last_seen = ?, online = 1 WHERE id = ?",
+    ).run(payload.name, payload.avatar, payload.photoUrl ?? null, Date.now(), payload.uid);
+    return findUserById(payload.uid)!;
+  }
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO users
+      (id, name, username, email, password_hash, avatar, photo_url, cover_url, status, about, city, birthday, relationship, method, is_demo, is_admin, online, created_at, last_seen)
+     VALUES (?, ?, ?, ?, NULL, ?, ?, NULL, '', '', '', '', '', ?, 0, ?, 1, ?, ?)`,
+  ).run(
+    payload.uid,
+    payload.name,
+    payload.username ?? null,
+    payload.email ?? null,
+    payload.avatar,
+    payload.photoUrl ?? null,
+    payload.method || "email",
+    payload.isAdmin ? 1 : 0,
+    now,
+    now,
+  );
+  try {
+    seedNewUserWorld(payload.uid);
+  } catch (error) {
+    console.error("seedNewUserWorld failed for portable session", error);
+  }
+  return findUserById(payload.uid)!;
+}
 
 export type AuthUser = {
   id: string;
@@ -81,11 +170,29 @@ export function sessionCookieOptions(request?: Request) {
 
 export async function createSession(userId: string, request?: Request) {
   const db = getDb();
-  const token = randomBytes(32).toString("base64url");
+  const user = findUserById(userId);
+  if (!user) throw new Error("user_not_found");
   const now = Date.now();
-  db.prepare(
-    "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-  ).run(token, userId, now, now + SESSION_TTL_MS);
+  // Signed portable token — survives Vercel instance hops where SQLite does not.
+  const token = signPortableSession({
+    v: 1,
+    uid: user.id,
+    exp: now + SESSION_TTL_MS,
+    name: user.name,
+    avatar: user.avatar,
+    method: user.method,
+    email: user.email,
+    username: user.username,
+    photoUrl: user.photo_url,
+    isAdmin: Number(user.is_admin),
+  });
+  try {
+    db.prepare(
+      "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+    ).run(token, userId, now, now + SESSION_TTL_MS);
+  } catch {
+    /* local session mirror is best-effort */
+  }
   try {
     const store = await cookies();
     store.set(SESSION_COOKIE, token, sessionCookieOptions(request));
@@ -137,16 +244,28 @@ export async function getCurrentUser(): Promise<UserRow | null> {
   const token = await getSessionToken();
   if (!token) return null;
   const db = getDb();
-  const row = db
-    .prepare(
-      `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
-       WHERE s.token = ? AND s.expires_at > ?`,
-    )
-    .get(token, Date.now()) as Row | undefined;
-  if (!row) return null;
-  const user = row as unknown as UserRow;
+
+  const portable = verifyPortableSession(token);
+  let user: UserRow | null = null;
+  if (portable) {
+    user = upsertUserFromPortable(portable);
+  } else {
+    const row = db
+      .prepare(
+        `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
+         WHERE s.token = ? AND s.expires_at > ?`,
+      )
+      .get(token, Date.now()) as Row | undefined;
+    user = row ? (row as unknown as UserRow) : null;
+  }
+
+  if (!user) return null;
   if (Number(user.banned) !== 0) {
-    db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
+    try {
+      db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
+    } catch {
+      /* ignore */
+    }
     return null;
   }
   if (Number(user.is_admin) === 0 && isAdminEmail(user.email)) {
@@ -252,7 +371,11 @@ export function createUser(input: RegisterInput): UserRow {
     now,
     now,
   );
-  seedNewUserWorld(id);
+  try {
+    seedNewUserWorld(id);
+  } catch (error) {
+    console.error("seedNewUserWorld failed", error);
+  }
   return findUserById(id)!;
 }
 

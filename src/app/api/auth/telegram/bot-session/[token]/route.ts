@@ -43,7 +43,11 @@ export async function GET(request: Request, { params }: Params) {
   } catch (error) {
     console.error("telegram bot-session failed", error);
     return NextResponse.json(
-      { status: "error", error: "telegram_session_failed" },
+      {
+        status: "error",
+        error: "telegram_session_failed",
+        detail: error instanceof Error ? error.message : "unknown",
+      },
       { status: 500 },
     );
   }
