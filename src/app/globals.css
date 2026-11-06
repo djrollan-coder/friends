@@ -37,6 +37,7 @@
   --safe-left: var(--sal, env(safe-area-inset-left, 0px));
   --header-bar: 52px;
   --bottom-nav: 58px;
+  --skin-bright: 1;
 }
 
 * {
@@ -65,6 +66,7 @@ html {
 
 body {
   overscroll-behavior-y: none;
+  filter: brightness(var(--skin-bright));
 }
 
 a {
@@ -113,6 +115,66 @@ select:-webkit-autofill {
     radial-gradient(900px 480px at 88% 18%, rgba(255, 255, 255, 0.06), transparent 50%),
     linear-gradient(160deg, #1a1c1f 0%, #101214 45%, #0d0e10 100%);
   background-attachment: fixed;
+}
+
+.skin-orb {
+  --orb-angle: -90deg;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.skin-orb:active {
+  cursor: grabbing;
+}
+
+.skin-orb-core {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.55), transparent 42%),
+    radial-gradient(circle at 70% 72%, rgba(80, 42, 22, 0.9), transparent 55%),
+    linear-gradient(145deg, #d9a07a 0%, #a65d35 48%, #5c3220 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.22),
+    0 4px 12px rgba(0, 0, 0, 0.45),
+    inset 0 -3px 8px rgba(0, 0, 0, 0.35);
+}
+
+.skin-orb-glow {
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, rgba(255, 230, 200, 0.35), transparent 60%);
+  pointer-events: none;
+}
+
+.skin-orb-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: #f3ebe3;
+  box-shadow:
+    0 0 0 1px rgba(40, 24, 14, 0.55),
+    0 1px 3px rgba(0, 0, 0, 0.5);
+  transform: rotate(var(--orb-angle)) translateY(-11px);
+  pointer-events: none;
 }
 
 /* Admin workspace */
@@ -1713,6 +1775,65 @@ html.is-native-ios.is-native-safe-inset .vk-page.has-mobile-nav {
     margin-left: 4px;
     margin-right: 4px;
   }
+}
+
+.support-page {
+  display: flex;
+  flex-direction: column;
+  min-height: min(70vh, 720px);
+}
+
+.support-thread {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+  padding: 4px 0 16px;
+}
+
+.support-bubble {
+  max-width: min(92%, 560px);
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--vk-border);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.support-bubble b {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--vk-muted);
+}
+
+.support-bubble.is-me {
+  align-self: flex-end;
+  background: rgba(196, 120, 74, 0.16);
+  border-color: rgba(196, 120, 74, 0.35);
+}
+
+.support-bubble.is-bot {
+  align-self: flex-start;
+}
+
+.support-composer {
+  display: flex;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--vk-border);
+}
+
+.support-composer input {
+  flex: 1;
+  border: 1px solid var(--vk-border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--vk-text);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
 }
 
 .messages-page.vk-card {

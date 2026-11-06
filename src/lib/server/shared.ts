@@ -75,7 +75,7 @@ export type ChatDTO = {
 
 export type NotificationDTO = {
   id: string;
-  type: "message" | "like" | "comment" | "friend" | "repost" | "group";
+  type: "message" | "like" | "comment" | "friend" | "repost" | "group" | "support";
   title: string;
   body: string;
   href: string;

@@ -76,6 +76,7 @@ export const navItems: NavItem[] = [
 export const extraNav: NavItem[] = [
   { href: "/apps", label: "Сервисы", icon: "apps", badge: 13 },
   { href: "/docs", label: "Файлы", icon: "docs" },
+  { href: "/support", label: "Поддержка", icon: "support" },
   { href: "/settings", label: "Настройки", icon: "settings" },
 ];
 

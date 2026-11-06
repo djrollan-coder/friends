@@ -25,6 +25,7 @@ const navKey: Record<string, string> = {
   "/bookmarks": "nav.bookmarks",
   "/apps": "nav.apps",
   "/docs": "nav.docs",
+  "/support": "nav.support",
   "/settings": "nav.settings",
 };
 

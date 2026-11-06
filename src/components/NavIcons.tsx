@@ -80,6 +80,14 @@ export function NavIcon({ name }: { name: string }) {
           <path d="M14 4v4h4" />
         </svg>
       );
+    case "support":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <circle cx="12" cy="12" r="7" />
+          <path d="M9 10a3 3 0 1 1 3 3v2" />
+          <circle cx="12" cy="18" r=".8" fill="currentColor" stroke="none" />
+        </svg>
+      );
     case "ads":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">

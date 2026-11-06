@@ -448,6 +448,18 @@ export function getAdminSettings(): AppSettings & { openReports: number } {
   return { ...getAppSettings(), openReports: count("SELECT COUNT(*) AS n FROM reports WHERE status = 'open'") };
 }
 
+/** One round-trip for /manage — avoids browser connection starvation with SSE. */
+export function getAdminBootstrap() {
+  return {
+    overview: getAdminOverview(),
+    users: listAdminUsers(),
+    posts: listAdminPosts(),
+    groups: listAdminGroups(),
+    reports: listReports(),
+    settings: getAdminSettings(),
+  };
+}
+
 export function adminUpdateSettings(patch: Partial<AppSettings>) {
   return updateAppSettings(patch);
 }

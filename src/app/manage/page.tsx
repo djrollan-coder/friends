@@ -92,26 +92,55 @@ const TABS = [
   "Сообщество",
   "Контент",
   "Безопасность",
+  "Агенты",
   "Настройки",
 ] as const;
 type Tab = (typeof TABS)[number];
 
+type AgentsState = {
+  news: {
+    enabled: boolean;
+    aiConfigured: boolean;
+    lastRun: number | null;
+    lastPostId: string | null;
+  };
+  support: {
+    enabled: boolean;
+    aiConfigured: boolean;
+    tickets: Array<{
+      id: string;
+      summary: string;
+      urgency: string;
+      user_name: string;
+      user_email: string | null;
+      created_at: number;
+    }>;
+  };
+};
+
 async function adminFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    credentials: "same-origin",
-    cache: "no-store",
-    ...init,
-    headers: {
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (response.status === 401 || response.status === 403) {
-    throw new Error("forbidden");
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 12_000);
+  try {
+    const response = await fetch(url, {
+      credentials: "same-origin",
+      cache: "no-store",
+      ...init,
+      signal: controller.signal,
+      headers: {
+        ...(init?.body ? { "Content-Type": "application/json" } : {}),
+        ...(init?.headers ?? {}),
+      },
+    });
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("forbidden");
+    }
+    const data = (await response.json().catch(() => ({}))) as T & { error?: string };
+    if (!response.ok) throw new Error(data.error ?? `http_${response.status}`);
+    return data;
+  } finally {
+    window.clearTimeout(timer);
   }
-  const data = (await response.json().catch(() => ({}))) as T & { error?: string };
-  if (!response.ok) throw new Error(data.error ?? `http_${response.status}`);
-  return data;
 }
 
 function badge(text: string, tone: "ok" | "warn" | "muted") {
@@ -134,6 +163,8 @@ export default function ManagePage() {
   const [groups, setGroups] = useState<AdminGroup[]>([]);
   const [reports, setReports] = useState<AdminReport[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [agents, setAgents] = useState<AgentsState | null>(null);
+  const [newsTopic, setNewsTopic] = useState("");
   const [userQuery, setUserQuery] = useState("");
   const [postQuery, setPostQuery] = useState("");
   const [postFilter, setPostFilter] = useState<"all" | "pending" | "published">("all");
@@ -148,22 +179,30 @@ export default function ManagePage() {
     setLoading(true);
     setError("");
     try {
-      const [nextOverview, nextUsers, nextPosts, nextGroups, nextReports, nextSettings] =
-        await Promise.all([
-          adminFetch<Overview>("/api/admin/overview"),
-          adminFetch<{ users: AdminUser[] }>("/api/admin/users"),
-          adminFetch<{ posts: AdminPost[] }>("/api/admin/posts"),
-          adminFetch<{ groups: AdminGroup[] }>("/api/admin/groups"),
-          adminFetch<{ reports: AdminReport[] }>("/api/admin/reports"),
-          adminFetch<Settings>("/api/admin/settings"),
-        ]);
-      setOverview(nextOverview);
-      setUsers(nextUsers.users);
-      setPosts(nextPosts.posts);
-      setGroups(nextGroups.groups);
-      setReports(nextReports.reports);
-      setSettings(nextSettings);
+      const data = await adminFetch<{
+        overview: Overview;
+        users: AdminUser[];
+        posts: AdminPost[];
+        groups: AdminGroup[];
+        reports: AdminReport[];
+        settings: Settings;
+      }>("/api/admin/bootstrap");
+      setOverview(data.overview);
+      setUsers(data.users);
+      setPosts(data.posts);
+      setGroups(data.groups);
+      setReports(data.reports);
+      setSettings(data.settings);
       setDenied(false);
+      try {
+        const [news, support] = await Promise.all([
+          adminFetch<AgentsState["news"]>("/api/admin/agents/news"),
+          adminFetch<AgentsState["support"]>("/api/admin/agents/support"),
+        ]);
+        setAgents({ news, support });
+      } catch {
+        setAgents(null);
+      }
     } catch (e) {
       if (e instanceof Error && e.message === "forbidden") {
         setDenied(true);
@@ -178,6 +217,12 @@ export default function ManagePage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const param = new URLSearchParams(window.location.search).get("tab");
+    if (param === "agents") setTab("Агенты");
+  }, []);
 
   async function run(label: string, action: () => Promise<void>) {
     setBusy(label);
@@ -297,10 +342,17 @@ export default function ManagePage() {
   const openReports = reports.filter((report) => report.status === "open");
   const chart = overview?.chart ?? [];
   const chartMax = Math.max(1, ...chart.map((day) => Math.max(day.users, day.posts)));
-  const points = chart
+  const userPoints = chart
     .map((day, index) => {
       const x = chart.length > 1 ? (index / (chart.length - 1)) * 676 : 338;
       const y = 172 - (day.users / chartMax) * 150;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  const postPoints = chart
+    .map((day, index) => {
+      const x = chart.length > 1 ? (index / (chart.length - 1)) * 676 : 338;
+      const y = 172 - (day.posts / chartMax) * 150;
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(" ");
@@ -425,7 +477,7 @@ export default function ManagePage() {
               <div className="admin-card-head">
                 <div>
                   <h2>Активность за неделю</h2>
-                  <p>Новые пользователи по дням</p>
+                  <p>Регистрации и публикации по дням</p>
                 </div>
               </div>
               <div className="admin-chart">
@@ -446,7 +498,17 @@ export default function ManagePage() {
                   </div>
                   <svg viewBox="0 0 680 190" preserveAspectRatio="none" aria-label="График активности">
                     <polyline
-                      points={points}
+                      points={postPoints}
+                      fill="none"
+                      stroke="#6ccba4"
+                      strokeWidth="2.5"
+                      vectorEffect="non-scaling-stroke"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      opacity="0.9"
+                    />
+                    <polyline
+                      points={userPoints}
                       fill="none"
                       stroke="#d58b5c"
                       strokeWidth="3"
@@ -473,10 +535,9 @@ export default function ManagePage() {
               </div>
               <div className="admin-chart-legend">
                 <span>
-                  <i /> Новые регистрации
-                </span>
-                <span>
-                  Всего за неделю <b>{overview.newUsers7d}</b>
+                  <i /> Регистрации <b>{overview.newUsers7d}</b>
+                  <i style={{ background: "#6ccba4", marginLeft: 10 }} /> Публикации{" "}
+                  <b>{overview.newPosts7d}</b>
                 </span>
               </div>
             </article>
@@ -863,6 +924,185 @@ export default function ManagePage() {
               </div>
             ) : null}
           </div>
+        </section>
+      ) : null}
+
+      {tab === "Агенты" ? (
+        <section className="admin-card admin-section-panel">
+          <div className="admin-card-head">
+            <div>
+              <h2>AI-агенты</h2>
+              <p>Новости Friends News и техподдержка кабинета</p>
+            </div>
+          </div>
+          {!agents ? (
+            <div className="admin-empty-state">
+              <span>…</span>
+              <b>Загружаем агентов</b>
+            </div>
+          ) : (
+            <div className="admin-settings">
+              <div className="admin-setting">
+                <span>
+                  <b>Агент новостей</b>
+                  <small>
+                    Публикует от Friends News в сообщество. Cron 09:00 UTC.
+                    {agents.news.lastRun
+                      ? ` Последний запуск: ${new Date(agents.news.lastRun).toLocaleString("ru-RU")}`
+                      : " Ещё не запускался."}
+                    {!agents.news.aiConfigured ? " AI Gateway не настроен." : ""}
+                  </small>
+                </span>
+                <button
+                  type="button"
+                  className={`admin-switch ${agents.news.enabled ? "on" : ""}`}
+                  disabled={busy !== ""}
+                  onClick={() =>
+                    void run("news-toggle", async () => {
+                      const next = await adminFetch<{ enabled: boolean }>("/api/admin/agents/news", {
+                        method: "POST",
+                        body: JSON.stringify({ action: "toggle", enabled: !agents.news.enabled }),
+                      });
+                      setAgents((prev) =>
+                        prev ? { ...prev, news: { ...prev.news, enabled: next.enabled } } : prev,
+                      );
+                      flash("Агент новостей обновлён");
+                    })
+                  }
+                >
+                  <i />
+                </button>
+              </div>
+              <div className="admin-search" style={{ marginTop: 8 }}>
+                <input
+                  value={newsTopic}
+                  onChange={(e) => setNewsTopic(e.target.value)}
+                  placeholder="Тема выпуска (необязательно)"
+                />
+                <button
+                  type="button"
+                  className="admin-primary"
+                  style={{ whiteSpace: "nowrap" }}
+                  disabled={busy !== "" || !agents.news.enabled || !agents.news.aiConfigured}
+                  onClick={() =>
+                    void run("news-run", async () => {
+                      const result = await adminFetch<{ postId?: string | null }>(
+                        "/api/admin/agents/news",
+                        {
+                          method: "POST",
+                          body: JSON.stringify({ topic: newsTopic || undefined }),
+                        },
+                      );
+                      setAgents((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              news: {
+                                ...prev.news,
+                                lastRun: Date.now(),
+                                lastPostId: result.postId ?? prev.news.lastPostId,
+                              },
+                            }
+                          : prev,
+                      );
+                      flash(result.postId ? `Новость ${result.postId} опубликована` : "Новость готова");
+                    })
+                  }
+                >
+                  Сгенерировать сейчас
+                </button>
+              </div>
+
+              <div className="admin-setting" style={{ marginTop: 18 }}>
+                <span>
+                  <b>Агент поддержки</b>
+                  <small>
+                    Чат `/support` для пользователей кабинета.
+                    {!agents.support.aiConfigured ? " AI Gateway не настроен." : ""}
+                  </small>
+                </span>
+                <button
+                  type="button"
+                  className={`admin-switch ${agents.support.enabled ? "on" : ""}`}
+                  disabled={busy !== ""}
+                  onClick={() =>
+                    void run("support-toggle", async () => {
+                      const next = await adminFetch<{ enabled: boolean }>(
+                        "/api/admin/agents/support",
+                        {
+                          method: "POST",
+                          body: JSON.stringify({
+                            action: "toggle",
+                            enabled: !agents.support.enabled,
+                          }),
+                        },
+                      );
+                      setAgents((prev) =>
+                        prev
+                          ? { ...prev, support: { ...prev.support, enabled: next.enabled } }
+                          : prev,
+                      );
+                      flash("Агент поддержки обновлён");
+                    })
+                  }
+                >
+                  <i />
+                </button>
+              </div>
+
+              <div className="admin-list" style={{ marginTop: 12 }}>
+                {agents.support.tickets.map((ticket) => (
+                  <div className="admin-row" key={ticket.id}>
+                    <div className="admin-row-main">
+                      <div>
+                        <b>
+                          {ticket.user_name}
+                          {badge(ticket.urgency, ticket.urgency === "high" ? "warn" : "muted")}
+                        </b>
+                        <small>{ticket.user_email ?? ticket.id}</small>
+                        <p className="admin-row-text">{ticket.summary}</p>
+                      </div>
+                    </div>
+                    <div className="admin-row-actions">
+                      <button
+                        type="button"
+                        disabled={busy !== ""}
+                        onClick={() =>
+                          void run("ticket-resolve", async () => {
+                            await adminFetch("/api/admin/agents/support", {
+                              method: "POST",
+                              body: JSON.stringify({ action: "resolve", ticketId: ticket.id }),
+                            });
+                            setAgents((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    support: {
+                                      ...prev.support,
+                                      tickets: prev.support.tickets.filter((t) => t.id !== ticket.id),
+                                    },
+                                  }
+                                : prev,
+                            );
+                            flash("Тикет закрыт");
+                          })
+                        }
+                      >
+                        Закрыть
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {!agents.support.tickets.length ? (
+                  <div className="admin-empty-state">
+                    <span>✓</span>
+                    <b>Открытых тикетов нет</b>
+                    <p>Эскалации из `/support` появятся здесь.</p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
         </section>
       ) : null}
 

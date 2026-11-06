@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { BrightnessOrb } from "@/components/BrightnessOrb";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { useT } from "@/lib/i18n/I18nProvider";
 import { fetchNotifications } from "@/lib/notify";
@@ -109,6 +110,7 @@ export function Header() {
               <span className="vk-header-avatar">{avatar}</span>
             )}
           </button>
+          <BrightnessOrb />
         </nav>
       </div>
     </header>

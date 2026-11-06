@@ -330,6 +330,17 @@ CREATE TABLE IF NOT EXISTS auth_rate_limits (
   count        INTEGER NOT NULL,
   window_start INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  summary     TEXT NOT NULL,
+  urgency     TEXT NOT NULL DEFAULT 'normal',
+  status      TEXT NOT NULL DEFAULT 'open',
+  created_at  INTEGER NOT NULL,
+  resolved_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS support_tickets_status ON support_tickets(status, created_at DESC);
 `;
 
 const DEMO_USERS: Array<{

@@ -49,10 +49,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (isManage) {
     return (
       <div className="vk-page admin-shell">
-        <LiveBridge />
         <Header />
         <main className="admin-shell-main">{children}</main>
-        <ScheduledSendRunner />
       </div>
     );
   }

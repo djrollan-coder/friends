@@ -82,7 +82,7 @@ export type ChatThread = {
 
 export type NotificationItem = {
   id: string;
-  type: "message" | "like" | "comment" | "friend" | "repost" | "group";
+  type: "message" | "like" | "comment" | "friend" | "repost" | "group" | "support";
   title: string;
   body: string;
   href: string;
