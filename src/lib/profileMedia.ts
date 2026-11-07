@@ -14,7 +14,10 @@ export function fileToDataUrl(
   opts: { maxWidth: number; maxHeight: number; quality?: number },
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    if (!file.type.startsWith("image/")) {
+    // iOS may report HEIC as "image/heic", "image/heif", or even "" for some camera photos.
+    // Accept anything that the browser can decode via Image element.
+    const mime = file.type.toLowerCase();
+    if (mime && !mime.startsWith("image/")) {
       reject(new Error("Выберите изображение"));
       return;
     }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useT } from "@/lib/i18n/I18nProvider";
 import {
   defaultProfileMedia,
@@ -37,6 +38,37 @@ export function ProfileEditor({ open, onClose, media, bio, onSave }: Props) {
   }, [open, media, bio]);
 
   if (!open) return null;
+
+  // iOS Safari blocks programmatic .click() on file inputs inside overflow:auto containers.
+  // Rendering them via portal (directly in body) works around this restriction.
+  const fileInputs =
+    typeof document !== "undefined"
+      ? createPortal(
+          <>
+            <input
+              ref={coverRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                void onPick("cover", e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+            <input
+              ref={photoRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                void onPick("photo", e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+          </>,
+          document.body,
+        )
+      : null;
 
   async function onPick(kind: "photo" | "cover", file: File | undefined) {
     if (!file) return;
@@ -76,6 +108,7 @@ export function ProfileEditor({ open, onClose, media, bio, onSave }: Props) {
   }
 
   return (
+    <>
     <div className="profile-editor-backdrop" role="presentation" onClick={onClose}>
       <div
         className="profile-editor"
@@ -111,16 +144,6 @@ export function ProfileEditor({ open, onClose, media, bio, onSave }: Props) {
           >
             {busy === "cover" ? t("common.loading") : t("profile.changeCover")}
           </button>
-          <input
-            ref={coverRef}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={(e) => {
-              void onPick("cover", e.target.files?.[0]);
-              e.target.value = "";
-            }}
-          />
         </div>
 
         <div className="profile-editor-photo-row">
@@ -137,16 +160,6 @@ export function ProfileEditor({ open, onClose, media, bio, onSave }: Props) {
             >
               {busy === "photo" ? t("common.loading") : t("profile.changeAvatar")}
             </button>
-            <input
-              ref={photoRef}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(e) => {
-                void onPick("photo", e.target.files?.[0]);
-                e.target.value = "";
-              }}
-            />
             <p>{t("profile.photoHint")}</p>
           </div>
         </div>
@@ -211,5 +224,7 @@ export function ProfileEditor({ open, onClose, media, bio, onSave }: Props) {
         </div>
       </div>
     </div>
+    {fileInputs}
+    </>
   );
 }
