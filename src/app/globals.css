@@ -117,6 +117,10 @@ select:-webkit-autofill {
   background-attachment: fixed;
 }
 
+.is-native-ios .skin-orb {
+  display: none !important;
+}
+
 .skin-orb {
   --orb-angle: -90deg;
   width: 36px;
