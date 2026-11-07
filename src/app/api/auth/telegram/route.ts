@@ -10,8 +10,16 @@ import {
   findOrCreateTelegramUser,
   toAuthUser,
 } from "@/lib/server/auth";
+import { bumpRateLimit, clientIp, rateLimitResponse } from "@/lib/server/rateLimit";
 
 export async function POST(request: Request) {
+  const ip = clientIp(request);
+  try {
+    bumpRateLimit(`telegram_auth:ip:${ip}`, 20, 15 * 60 * 1000);
+  } catch {
+    return rateLimitResponse();
+  }
+
   if (!telegramConfigured()) {
     return NextResponse.json(
       { error: "telegram_not_configured" },

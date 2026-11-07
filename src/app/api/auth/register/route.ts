@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
 import { createSession } from "@/lib/server/auth";
 import { registerAccount } from "@/lib/server/accounts";
+import { bumpRateLimit, clientIp, rateLimitResponse } from "@/lib/server/rateLimit";
+import { parseBody, registerBodySchema } from "@/lib/server/validation";
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as
-    | { name?: string; email?: string; password?: string }
-    | null;
-  if (!body) return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   try {
+    bumpRateLimit(`register:ip:${clientIp(request)}`, 10, 60 * 60 * 1000);
+  } catch {
+    return rateLimitResponse();
+  }
+
+  const raw = await request.json().catch(() => null);
+  if (!raw) return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+  try {
+    const body = parseBody(registerBodySchema, raw);
     const { user } = registerAccount(body);
     await createSession(user.id, request);
     return NextResponse.json({ user });

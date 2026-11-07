@@ -25,11 +25,12 @@ type PortableSession = {
 };
 
 function sessionSecret() {
-  return (
-    process.env.FRIENDS_SESSION_SECRET?.trim() ||
-    process.env.TELEGRAM_BOT_TOKEN?.trim() ||
-    "friends-dev-session-secret"
-  );
+  const secret = process.env.FRIENDS_SESSION_SECRET?.trim();
+  if (secret) return secret;
+  if (process.env.NODE_ENV === "production" || process.env.VERCEL === "1") {
+    throw new Error("FRIENDS_SESSION_SECRET is required in production");
+  }
+  return "friends-dev-session-secret";
 }
 
 function signPortableSession(payload: PortableSession) {
@@ -150,7 +151,10 @@ export function verifyPassword(password: string, stored: string | null) {
 }
 
 function isSecureRequest(request?: Request) {
+  if (process.env.NODE_ENV === "production" || process.env.VERCEL === "1") return true;
   if (!request) return false;
+  const forwarded = request.headers.get("x-forwarded-proto");
+  if (forwarded) return forwarded.split(",")[0]?.trim() === "https";
   try {
     return new URL(request.url).protocol === "https:";
   } catch {
@@ -350,6 +354,12 @@ export function createUser(input: RegisterInput): UserRow {
   const email = input.email?.trim().toLowerCase() || null;
   const id = uid("u");
   const now = Date.now();
+  // Never persist plaintext passwords — only scrypt digests (or NULL for OAuth/OTP-only).
+  const passwordHash =
+    input.password && input.password.length > 0 ? hashPassword(input.password) : null;
+  if (passwordHash && !passwordHash.startsWith("scrypt:")) {
+    throw new Error("password_hash_failed");
+  }
   const adminCount = db
     .prepare("SELECT COUNT(*) AS n FROM users WHERE is_admin = 1 AND is_demo = 0")
     .get() as { n: number };
@@ -363,7 +373,7 @@ export function createUser(input: RegisterInput): UserRow {
     name,
     input.username?.trim() || null,
     email,
-    input.password ? hashPassword(input.password) : null,
+    passwordHash,
     input.avatar?.slice(0, 2).toUpperCase() || initials(name),
     input.photoUrl ?? null,
     input.method ?? "email",

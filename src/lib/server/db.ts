@@ -696,8 +696,30 @@ function hashPasswordLocal(password: string) {
   return `scrypt:${salt}:${hash}`;
 }
 
-/** Built-in operator account for /manage — email/password match README. */
+/**
+ * Local/dev helper: seed a known admin only when explicitly enabled.
+ * Production uses FRIENDS_ADMIN_EMAILS / first registered user — never a fixed password.
+ */
 function ensureDefaultAdmin(db: DatabaseSync) {
+  const allowSeed =
+    process.env.FRIENDS_SEED_DEFAULT_ADMIN === "1" &&
+    process.env.NODE_ENV !== "production" &&
+    process.env.VERCEL !== "1";
+  if (!allowSeed) {
+    const admins = db
+      .prepare("SELECT COUNT(*) AS n FROM users WHERE is_admin = 1 AND is_demo = 0")
+      .get() as { n: number };
+    if (Number(admins.n) === 0) {
+      const oldest = db
+        .prepare("SELECT id FROM users WHERE is_demo = 0 ORDER BY created_at ASC LIMIT 1")
+        .get() as { id: string } | undefined;
+      if (oldest) {
+        db.prepare("UPDATE users SET is_admin = 1 WHERE id = ?").run(oldest.id);
+      }
+    }
+    return;
+  }
+
   const email = "admin@friends.local";
   const existing = db
     .prepare("SELECT id, is_admin FROM users WHERE lower(email) = lower(?)")
@@ -713,6 +735,7 @@ function ensureDefaultAdmin(db: DatabaseSync) {
   const id = "u_admin_default";
   const name = "Админ Friends";
   const usernameTaken = db.prepare("SELECT id FROM users WHERE username = ?").get("admin");
+  const seedPassword = process.env.FRIENDS_SEED_ADMIN_PASSWORD?.trim() || "secret123";
   db.prepare(
     `INSERT INTO users
       (id, name, username, email, password_hash, avatar, photo_url, cover_url, status, about, city, birthday, relationship, method, is_demo, is_admin, online, created_at, last_seen)
@@ -722,23 +745,11 @@ function ensureDefaultAdmin(db: DatabaseSync) {
     name,
     usernameTaken ? null : "admin",
     email,
-    hashPasswordLocal("secret123"),
+    hashPasswordLocal(seedPassword),
     "АF",
     now,
     now,
   );
-
-  const admins = db
-    .prepare("SELECT COUNT(*) AS n FROM users WHERE is_admin = 1 AND is_demo = 0")
-    .get() as { n: number };
-  if (Number(admins.n) === 0) {
-    const oldest = db
-      .prepare("SELECT id FROM users WHERE is_demo = 0 ORDER BY created_at ASC LIMIT 1")
-      .get() as { id: string } | undefined;
-    if (oldest) {
-      db.prepare("UPDATE users SET is_admin = 1 WHERE id = ?").run(oldest.id);
-    }
-  }
 }
 
 export function getDb(): DatabaseSync {

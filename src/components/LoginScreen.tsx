@@ -469,7 +469,7 @@ export function LoginScreen() {
                   value={emailCode}
                   onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   required
-                  minLength={6}
+                  minLength={8}
                   maxLength={6}
                 />
               </label>
@@ -484,7 +484,7 @@ export function LoginScreen() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  minLength={6}
+                  minLength={8}
                 />
               </label>
             ) : null}

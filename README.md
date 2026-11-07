@@ -52,17 +52,16 @@ npm run build && npm run start
 - **Сообщество** — список групп и удаление.
 - **Безопасность** — жалобы пользователей, закрытие и удаление объекта.
 - **Настройки** — регистрация, премодерация, комментарии (применяются сразу).
+- **Агенты** — AI-новости (Friends News) и техподдержка `/support`, тикеты эскалации.
 - **Скачать отчёт** — CSV с метриками и пользователями.
 
 Первый зарегистрированный пользователь автоматически становится админом.
 Дополнительно админов можно задать через `FRIENDS_ADMIN_EMAILS`.
 
-Готовый локальный вход в `/manage`:
+Локальный seed-админ (только с `FRIENDS_SEED_DEFAULT_ADMIN=1`, не на Vercel):
+`admin@friends.local` + `FRIENDS_SEED_ADMIN_PASSWORD` (или дефолт из `.env.example` комментариев).
 
-```text
-admin@friends.local
-secret123
-```
+В production админы — через `FRIENDS_ADMIN_EMAILS` и первого зарегистрированного пользователя.
 
 ## Переменные окружения
 
@@ -71,13 +70,17 @@ secret123
 ```bash
 NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=
 TELEGRAM_BOT_TOKEN=
+TELEGRAM_WEBHOOK_SECRET=           # optional Telegram webhook secret token
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=      # Google Drive backup (optional)
-NEXT_PUBLIC_SITE_URL=              # public origin for Telegram deep links
+NEXT_PUBLIC_SITE_URL=              # public origin (CSRF + Telegram deep links)
 FRIENDS_DATA_DIR=                  # optional persistent data directory
 FRIENDS_ADMIN_EMAILS=              # comma-separated admin emails
 RESEND_API_KEY=                    # Resend for email login codes
 RESEND_FROM_EMAIL=Friends <onboarding@resend.dev>
-FRIENDS_SESSION_SECRET=            # HMAC for sessions + email OTPs
+FRIENDS_SESSION_SECRET=            # required on Vercel/production
+AI_GATEWAY_API_KEY=                # Vercel AI Gateway (OIDC on Vercel also works)
+FRIENDS_AI_MODEL=openai/gpt-4o-mini
+CRON_SECRET=                       # Bearer for /api/cron/news
 ```
 
 ## Основные API

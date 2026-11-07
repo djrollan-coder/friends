@@ -123,13 +123,17 @@ select:-webkit-autofill {
   height: 36px;
   border: 0;
   padding: 0;
+  margin: 0;
   border-radius: 50%;
   background: transparent;
   cursor: grab;
   touch-action: none;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  line-height: 0;
+  overflow: visible;
   -webkit-user-select: none;
   user-select: none;
 }
@@ -509,22 +513,31 @@ html.is-native-ios.is-native-safe-inset .vk-page.has-mobile-nav {
 .vk-header-links {
   margin-left: auto;
   display: flex;
-  gap: 8px;
+  gap: 4px;
   align-items: center;
+  align-self: center;
+  height: 36px;
+  flex-shrink: 0;
 }
 
 .vk-header-icon {
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #aaaeb3;
   background: transparent;
   border: 0;
+  padding: 0;
+  margin: 0;
+  line-height: 0;
   cursor: pointer;
   position: relative;
   text-decoration: none;
+  flex-shrink: 0;
+  vertical-align: middle;
 }
 
 .vk-header-icon:hover {
@@ -536,11 +549,12 @@ html.is-native-ios.is-native-safe-inset .vk-page.has-mobile-nav {
 .vk-header-icon svg {
   width: 20px;
   height: 20px;
+  display: block;
 }
 
 .vk-header-avatar {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: linear-gradient(160deg, #d4895a, #8a4f2e);
   display: grid;
@@ -548,12 +562,23 @@ html.is-native-ios.is-native-safe-inset .vk-page.has-mobile-nav {
   color: #fff;
   font-size: 11px;
   font-weight: 700;
+  line-height: 1;
 }
 
 .vk-header-avatar-img {
+  width: 28px;
+  height: 28px;
   object-fit: cover;
   padding: 0;
   background: transparent;
+}
+
+.vk-header-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .vk-shell {
@@ -1884,13 +1909,24 @@ html.is-native-ios.is-native-safe-inset .vk-page.has-mobile-nav {
 
 .messages-head .vk-page-title {
   margin: 0;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .messages-head-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   justify-content: flex-end;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.messages-head-actions .vk-btn {
+  white-space: nowrap;
 }
 
 .vk-btn.ghost {
@@ -4665,16 +4701,34 @@ button.interest-chip {
   color: #fff;
 }
 
+.lang-switch-compact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
 .lang-switch-compact select {
   appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  width: 36px;
+  height: 28px;
   border: 1px solid var(--vk-border);
   background: rgba(0, 0, 0, 0.28);
   color: var(--vk-text);
   border-radius: 8px;
-  padding: 6px 8px;
+  padding: 0;
+  margin: 0;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
+  line-height: 26px;
+  text-align: center;
+  text-align-last: center;
   cursor: pointer;
 }
 
@@ -4824,10 +4878,45 @@ button.interest-chip {
     border-radius: 14px;
   }
 
+  .vk-header-links {
+    height: 36px;
+    gap: 2px;
+  }
+
+  .vk-header-icon,
+  .lang-switch-compact,
+  .skin-orb {
+    width: 36px;
+    height: 36px;
+  }
+
   .vk-header-icon {
-    width: 40px;
-    height: 40px;
     border-radius: 12px;
+  }
+
+  .messages-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .messages-head .vk-page-title {
+    white-space: normal;
+  }
+
+  .messages-head-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .messages-head-actions .vk-btn {
+    width: 100%;
+    justify-content: center;
+    padding-left: 8px;
+    padding-right: 8px;
+    font-size: 12px;
   }
 
   .vk-shell {

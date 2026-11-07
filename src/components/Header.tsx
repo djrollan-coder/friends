@@ -77,11 +77,7 @@ export function Header() {
               <path d="M6 16h12l-1.2-1.6V10a4.8 4.8 0 1 0-9.6 0v4.4L6 16Z" />
               <path d="M10 18a2 2 0 0 0 4 0" />
             </svg>
-            {badge > 0 ? (
-              <span className="vk-badge" style={{ position: "absolute", top: 4, right: 4 }}>
-                {badge}
-              </span>
-            ) : null}
+            {badge > 0 ? <span className="vk-badge vk-header-badge">{badge}</span> : null}
           </Link>
           <Link href="/audio" className="vk-header-icon" aria-label={t("header.music")}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withUser, readBody } from "@/lib/server/http";
 import { createPost, listFeed } from "@/lib/server/feed";
+import { parseBody, postBodySchema } from "@/lib/server/validation";
 
 export async function GET(request: Request) {
   return withUser(async (me) => {
@@ -17,14 +18,15 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return withUser(async (me) => {
-    const body = await readBody<{
-      text?: string;
-      image?: string;
-      video?: string;
-      groupId?: string;
-      attachment?: unknown;
-    }>(request);
-    const post = createPost(me.id, body);
+    const raw = await readBody(request);
+    const body = parseBody(postBodySchema, raw);
+    const post = createPost(me.id, {
+      text: body.text,
+      image: body.image ?? undefined,
+      video: body.video ?? undefined,
+      groupId: body.groupId ?? undefined,
+      attachment: body.attachment ?? undefined,
+    });
     return NextResponse.json({ post });
   });
 }

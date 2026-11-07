@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { startEmailLogin } from "@/lib/server/emailAuth";
+import { emailStartBodySchema, parseBody } from "@/lib/server/validation";
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as
-    | { email?: string; name?: string; mode?: "login" | "register" }
-    | null;
-  if (!body) return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+  const raw = await request.json().catch(() => null);
+  if (!raw) return NextResponse.json({ error: "invalid_body" }, { status: 400 });
 
   try {
+    const body = parseBody(emailStartBodySchema, raw);
     const result = await startEmailLogin(request, body);
     return NextResponse.json(result);
   } catch (error) {
