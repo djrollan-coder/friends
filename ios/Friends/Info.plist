@@ -43,5 +43,11 @@
 	</dict>
 	<key>UIRequiresFullScreen</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Выберите фото для аватарки или обложки профиля</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Сделайте фото для аватарки или обложки профиля</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Сохранение фото из Friends</string>
 </dict>
 </plist>

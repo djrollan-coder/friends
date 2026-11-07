@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -28,8 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+  const userRef = useRef<AuthUser | null>(null);
 
   const applyUser = useCallback((next: AuthUser | null) => {
+    userRef.current = next;
     setSessionAuthUser(next);
     setUser(next);
   }, []);
@@ -37,13 +40,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       const response = await fetch("/api/auth/me", { credentials: "same-origin", cache: "no-store" });
+      if (response.status === 401) {
+        applyUser(null);
+        return null;
+      }
+      if (!response.ok) return userRef.current;
       const data = (await response.json()) as { user: AuthUser | null };
       const next = data.user ?? null;
       applyUser(next);
       return next;
     } catch {
-      applyUser(null);
-      return null;
+      // Keep current session on transient network errors — don't kick to /login.
+      return userRef.current;
     }
   }, [applyUser]);
 

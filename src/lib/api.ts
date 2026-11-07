@@ -36,16 +36,32 @@ export type UploadResult = {
   type: string;
 };
 
-export async function uploadFile(file: File): Promise<UploadResult> {
+/** Convert a data URL to a Blob without fetch() (more reliable in WKWebView). */
+export function dataUrlToBlob(dataUrl: string): Blob {
+  const comma = dataUrl.indexOf(",");
+  if (comma < 0) throw new ApiError("invalid_image", 400);
+  const meta = dataUrl.slice(0, comma);
+  const b64 = dataUrl.slice(comma + 1);
+  const mime = /data:([^;]+)/.exec(meta)?.[1] || "image/jpeg";
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
+export async function uploadFile(file: Blob, filename = "upload.jpg"): Promise<UploadResult> {
   const form = new FormData();
-  form.append("file", file);
+  // Prefer Blob+filename — `new File()` is unreliable in older WKWebView.
+  form.append("file", file, filename);
   return api<UploadResult>("/api/upload", { method: "POST", body: form });
 }
 
 export async function uploadDataUrl(dataUrl: string, filename = "upload"): Promise<UploadResult> {
-  const response = await fetch(dataUrl);
-  const blob = await response.blob();
-  const extension = (blob.type.split("/")[1] ?? "bin").replace(/[^a-z0-9]/g, "");
-  const file = new File([blob], `${filename}.${extension}`, { type: blob.type });
-  return uploadFile(file);
+  const blob = dataUrlToBlob(dataUrl);
+  const mime = (blob.type || "image/jpeg").toLowerCase();
+  if (!mime.startsWith("image/")) {
+    throw new ApiError("unsupported_type", 415);
+  }
+  const extension = (mime.split("/")[1] ?? "jpg").replace(/[^a-z0-9]/g, "") || "jpg";
+  return uploadFile(blob, `${filename}.${extension}`);
 }

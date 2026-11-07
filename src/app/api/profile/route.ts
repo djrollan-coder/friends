@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { withUser, readBody } from "@/lib/server/http";
+import { withUser, readBody, fail } from "@/lib/server/http";
 import { getProfile, updateProfile } from "@/lib/server/social";
+import { parseBody, profileBodySchema } from "@/lib/server/validation";
 
 export async function GET() {
   return withUser(async (me) => {
@@ -10,17 +11,23 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   return withUser(async (me) => {
-    const body = await readBody<{
-      name?: string;
-      status?: string;
-      about?: string;
-      city?: string;
-      birthday?: string;
-      relationship?: string;
-      photo?: string | null;
-      cover?: string | null;
-    }>(request);
-    const profile = updateProfile(me.id, body);
+    let body;
+    try {
+      body = parseBody(profileBodySchema, await readBody(request));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "invalid_body";
+      return fail(message, 400);
+    }
+    const profile = updateProfile(me.id, {
+      name: body.name,
+      status: body.status,
+      about: body.about,
+      city: body.city,
+      birthday: body.birthday,
+      relationship: body.relationship,
+      photo: body.photo ?? body.photoUrl,
+      cover: body.cover ?? body.coverUrl,
+    });
     return NextResponse.json({ profile });
   });
 }

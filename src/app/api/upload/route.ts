@@ -40,7 +40,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_form" }, { status: 400 });
   }
   const file = form.get("file");
-  if (!(file instanceof File)) {
+  // WKWebView may send a Blob that isn't an instanceof File.
+  if (!(file instanceof Blob)) {
     return NextResponse.json({ error: "missing_file" }, { status: 400 });
   }
   if (file.size <= 0) {
@@ -51,14 +52,20 @@ export async function POST(request: Request) {
   }
 
   const mime = (file.type || "").toLowerCase();
-  const extension = EXTENSIONS[mime];
+  const extension =
+    EXTENSIONS[mime] ||
+    (mime.startsWith("image/") ? ".jpg" : null);
   if (!extension) {
     return NextResponse.json({ error: "unsupported_type" }, { status: 415 });
   }
 
   const name = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}${extension}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-  await fs.writeFile(path.join(uploadDir(), name), buffer);
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    await fs.writeFile(path.join(uploadDir(), name), buffer);
+  } catch {
+    return NextResponse.json({ error: "upload_failed" }, { status: 500 });
+  }
 
   return NextResponse.json({
     url: `/api/media/${name}`,

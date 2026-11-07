@@ -7,10 +7,12 @@ import { SortableBlocks } from "@/components/SortableBlocks";
 import { Wall } from "@/components/Wall";
 import { useAuth } from "@/components/AuthProvider";
 import { useT } from "@/lib/i18n/I18nProvider";
-import { uploadDataUrl } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { useLive } from "@/lib/live";
 import {
+  compressProfileImage,
   defaultProfileMedia,
+  type CompressKind,
   type ProfileMedia,
 } from "@/lib/profileMedia";
 import {
@@ -22,12 +24,20 @@ import {
   type ProfileDTO,
 } from "@/lib/profileStore";
 
-async function persistMediaValue(value: string, fallback: string) {
-  if (!value || value === fallback) return null;
+/**
+ * Persist profile media. On Vercel the upload filesystem is ephemeral, so we
+ * store a compressed JPEG data URL directly in the user row.
+ */
+async function persistMediaValue(
+  value: string,
+  fallback: string,
+  kind: CompressKind,
+): Promise<string | undefined> {
+  if (!value || value === fallback) return undefined;
   if (value.startsWith("data:")) {
-    const uploaded = await uploadDataUrl(value, "profile");
-    return uploaded.url;
+    return compressProfileImage(value, kind);
   }
+  // Legacy /api/media/... URLs from older uploads — keep if present.
   return value;
 }
 
@@ -54,11 +64,17 @@ function ProfileBlock() {
     void load();
   }, [load, user?.id]);
 
-  useLive(["presence"], load);
+  // Don't reload media while the editor is open — a live presence ping used to
+  // overwrite in-progress avatar/cover picks and make slots appear to swap.
+  useLive(["presence"], () => {
+    if (!editing) void load();
+  });
 
   const displayName = profile?.name ?? user?.name ?? "";
-  const photo = profile?.photo || user?.photoUrl || media.photo;
-  const hasPhoto = Boolean(photo && photo !== defaultProfileMedia.photo);
+  // Always render from media state so avatar/cover never swap after save.
+  const avatarUrl = media.photo;
+  const coverUrl = media.cover;
+  const hasPhoto = Boolean(avatarUrl && avatarUrl !== defaultProfileMedia.photo);
   const counts = profile?.counts;
 
   return (
@@ -66,7 +82,7 @@ function ProfileBlock() {
       <div className="vk-card vk-profile-card">
         <div
           className="vk-profile-cover"
-          style={{ backgroundImage: `url(${media.cover})` }}
+          style={{ backgroundImage: `url(${coverUrl})` }}
           role="img"
           aria-label={t("profile.cover")}
         />
@@ -77,7 +93,7 @@ function ProfileBlock() {
               {hasPhoto ? (
                 <div
                   className="vk-avatar has-photo"
-                  style={{ backgroundImage: `url(${photo})` }}
+                  style={{ backgroundImage: `url(${avatarUrl})` }}
                   role="img"
                   aria-label={displayName}
                 />
@@ -163,30 +179,41 @@ function ProfileBlock() {
         bio={bio}
         onClose={() => setEditing(false)}
         onSave={async ({ media: nextMedia, bio: nextBio }) => {
-          const photo = await persistMediaValue(
-            nextMedia.photo,
-            defaultProfileMedia.photo,
-          );
-          const cover = await persistMediaValue(
-            nextMedia.cover,
-            defaultProfileMedia.cover,
-          );
-          const updated = await saveProfile({
-            status: nextBio.status,
-            about: nextBio.about,
-            city: nextBio.city,
-            birthday: nextBio.birthday,
-            relationship: nextBio.relationship,
-            photo,
-            cover,
-          });
-          setProfile(updated);
-          setBio(bioFromProfile(updated));
-          setMedia({
-            photo: updated.photo || defaultProfileMedia.photo,
-            cover: updated.cover || defaultProfileMedia.cover,
-          });
-          void refresh();
+          try {
+            const photo = await persistMediaValue(
+              nextMedia.photo,
+              defaultProfileMedia.photo,
+              "photo",
+            );
+            const cover = await persistMediaValue(
+              nextMedia.cover,
+              defaultProfileMedia.cover,
+              "cover",
+            );
+            const updated = await saveProfile({
+              status: nextBio.status,
+              about: nextBio.about,
+              city: nextBio.city,
+              birthday: nextBio.birthday,
+              relationship: nextBio.relationship,
+              photo,
+              cover,
+            });
+            // Prefer the exact slots we just wrote — never re-map from a partial DTO.
+            const savedPhoto =
+              photo ?? updated.photo ?? nextMedia.photo ?? defaultProfileMedia.photo;
+            const savedCover =
+              cover ?? updated.cover ?? nextMedia.cover ?? defaultProfileMedia.cover;
+            setProfile(updated);
+            setBio(bioFromProfile(updated));
+            setMedia({ photo: savedPhoto, cover: savedCover });
+            void refresh();
+          } catch (error) {
+            if (error instanceof ApiError && error.code === "file_too_large") {
+              throw new Error("file_too_large");
+            }
+            throw error;
+          }
         }}
       />
     </>

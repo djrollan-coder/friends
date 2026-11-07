@@ -68,6 +68,22 @@ export const messageBodySchema = z.object({
   silent: z.boolean().optional(),
 });
 
+/** Profile media: path/URL or compressed JPEG data URL (stored in SQLite). */
+const profileMediaSchema = z
+  .string()
+  .trim()
+  .max(900_000)
+  .nullable()
+  .optional()
+  .refine(
+    (value) =>
+      value == null ||
+      value.startsWith("data:image/") ||
+      value.startsWith("/") ||
+      /^https?:\/\//i.test(value),
+    { message: "invalid_image" },
+  );
+
 export const profileBodySchema = z
   .object({
     name: nameSchema.optional(),
@@ -76,8 +92,10 @@ export const profileBodySchema = z
     city: z.string().trim().max(80).optional(),
     birthday: z.string().trim().max(32).optional(),
     relationship: z.string().trim().max(80).optional(),
-    photoUrl: z.string().trim().max(500).nullable().optional(),
-    coverUrl: z.string().trim().max(500).nullable().optional(),
+    photo: profileMediaSchema,
+    cover: profileMediaSchema,
+    photoUrl: profileMediaSchema,
+    coverUrl: profileMediaSchema,
     privacyWall: z.enum(["public", "friends", "private"]).optional(),
   })
   .strict();
