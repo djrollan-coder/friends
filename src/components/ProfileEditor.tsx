@@ -10,6 +10,17 @@ import {
 } from "@/lib/profileMedia";
 import { emptyProfileBio, type ProfileBio } from "@/lib/profileStore";
 
+declare global {
+  interface Window {
+    __FRIENDS_NATIVE__?: boolean;
+    __FRIENDS_PHOTO_CALLBACK__?: (dataUrl: string) => void;
+  }
+}
+
+function isNativeIOS() {
+  return typeof window !== "undefined" && !!window.__FRIENDS_NATIVE__;
+}
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -89,6 +100,32 @@ export function ProfileEditor({ open, onClose, media, bio, onSave }: Props) {
     }
   }
 
+  function pickNative(kind: "photo" | "cover") {
+    setBusy(kind);
+    setError("");
+    window.__FRIENDS_PHOTO_CALLBACK__ = (dataUrl: string) => {
+      window.__FRIENDS_PHOTO_CALLBACK__ = undefined;
+      if (!dataUrl) {
+        setBusy(null);
+        return;
+      }
+      const opts =
+        kind === "photo"
+          ? { maxWidth: 720, maxHeight: 720, quality: 0.86 }
+          : { maxWidth: 1600, maxHeight: 640, quality: 0.82 };
+      fetch(dataUrl)
+        .then((r) => r.blob())
+        .then((blob) => fileToDataUrl(blob as File, opts))
+        .then((resized) => {
+          setDraftMedia((prev) => ({ ...prev, [kind]: resized }));
+        })
+        .catch((e) => setError(e instanceof Error ? e.message : t("profile.uploadError")))
+        .finally(() => setBusy(null));
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).webkit?.messageHandlers?.friends?.postMessage({ type: "pickPhoto", kind });
+  }
+
   async function save() {
     setSaving(true);
     setError("");
@@ -140,7 +177,7 @@ export function ProfileEditor({ open, onClose, media, bio, onSave }: Props) {
             type="button"
             className="profile-editor-pick"
             disabled={busy === "cover"}
-            onClick={() => coverRef.current?.click()}
+            onClick={() => isNativeIOS() ? pickNative("cover") : coverRef.current?.click()}
           >
             {busy === "cover" ? t("common.loading") : t("profile.changeCover")}
           </button>
@@ -156,7 +193,7 @@ export function ProfileEditor({ open, onClose, media, bio, onSave }: Props) {
               type="button"
               className="profile-editor-pick solid"
               disabled={busy === "photo"}
-              onClick={() => photoRef.current?.click()}
+              onClick={() => isNativeIOS() ? pickNative("photo") : photoRef.current?.click()}
             >
               {busy === "photo" ? t("common.loading") : t("profile.changeAvatar")}
             </button>
