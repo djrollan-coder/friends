@@ -91,17 +91,16 @@ function ProfileBlock() {
           <div className="vk-profile-layout">
             <aside>
               {hasPhoto ? (
-                <Link
-                  href="/"
+                <div
                   className="vk-avatar has-photo"
                   style={{ backgroundImage: `url(${avatarUrl})` }}
                   role="img"
                   aria-label={displayName}
                 />
               ) : (
-                <Link href="/" className="vk-avatar" aria-label={displayName}>
+                <div className="vk-avatar" role="img" aria-label={displayName}>
                   {profile?.avatar ?? user?.avatar ?? "F"}
-                </Link>
+                </div>
               )}
               <div className="vk-side-actions">
                 <Link href="/messages">{t("profile.writeMessage")}</Link>
