@@ -5498,4 +5498,156 @@ html.is-native-ios body {
   font-size: 10px;
 }
 .admin-note { margin-top: 14px; font-size: 9px; color: #8e9095; line-height: 1.5; }
+
+/* ═══════════════════════════════════════════════════
+   MOBILE / NATIVE iOS — UX IMPROVEMENTS
+   ═══════════════════════════════════════════════════ */
+
+/* ── 1. Native iOS header: hide non-essential items ── */
+html.is-native-ios .lang-switch-compact {
+  display: none;
+}
+html.is-native-ios .vk-header-inner {
+  gap: 6px;
+}
+
+/* ── 2. Larger touch targets for profile actions ── */
+@media (max-width: 900px) {
+  .vk-side-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .vk-side-actions a,
+  .vk-side-actions button {
+    flex: 1 1 auto;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border: 1px solid var(--vk-border);
+    border-radius: 12px;
+    background: var(--vk-panel-soft);
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--vk-link);
+    text-decoration: none;
+    -webkit-tap-highlight-color: rgba(196,120,74,0.18);
+  }
+  .vk-side-actions a:hover,
+  .vk-side-actions button:hover {
+    text-decoration: none;
+    background: rgba(196,120,74,0.12);
+  }
+
+  /* Counts row: larger tap areas */
+  .vk-counts {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    margin-top: 12px;
+  }
+  .vk-counts a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 52px;
+    border-radius: 10px;
+    background: var(--vk-panel-soft);
+    padding: 6px 4px;
+    font-size: 11px;
+    text-align: center;
+    text-decoration: none;
+    color: var(--vk-muted);
+    gap: 2px;
+    -webkit-tap-highlight-color: rgba(196,120,74,0.18);
+  }
+  .vk-counts a:hover { text-decoration: none; background: rgba(196,120,74,0.1); }
+  .vk-counts a strong {
+    display: block;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--vk-title);
+    line-height: 1;
+  }
+
+  /* Page title on mobile */
+  .vk-page-title {
+    font-size: 18px;
+  }
+
+  /* Profile body: more compact padding */
+  .vk-profile-body .vk-main-pad {
+    padding: 12px 14px 16px;
+  }
+
+  /* Cover full-bleed on mobile */
+  .vk-profile-card .vk-profile-cover {
+    border-radius: 0;
+    height: 160px;
+  }
+
+  /* Post cards: bigger hit targets */
+  .vk-btn {
+    min-height: 40px;
+  }
+
+  /* Bottom nav icons: slightly bigger */
+  .mobile-bottom-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+  .mobile-bottom-nav a {
+    font-size: 10px;
+    padding: 8px 2px;
+  }
+
+  /* Message rows: bigger tap area */
+  .msg-row,
+  .friends-row {
+    min-height: 60px;
+  }
+}
+
+/* ── 3. iOS-specific bottom nav refinements ── */
+@media (max-width: 430px) {
+  .mobile-bottom-nav {
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+  .mobile-bottom-icon svg {
+    width: 25px;
+    height: 25px;
+  }
+}
+
+/* ── 4. Swipe-back hint: subtle left-edge indicator on native iOS ── */
+html.is-native-ios .vk-page::before {
+  content: '';
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: transparent;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* ── 5. Info table: mobile-friendly layout ── */
+@media (max-width: 430px) {
+  .vk-info-table {
+    font-size: 12px;
+    width: 100%;
+  }
+  .vk-info-table td:first-child {
+    color: var(--vk-muted);
+    padding-right: 8px;
+    white-space: nowrap;
+  }
+}
 .admin-empty-state .admin-primary { display: inline-block; text-decoration: none; }

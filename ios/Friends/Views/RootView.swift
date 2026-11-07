@@ -76,6 +76,8 @@ private struct FriendsWebContainer: UIViewRepresentable {
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
+        // Disable WKWebView built-in back swipe (it triggered the web sidebar).
+        // A custom left-edge gesture below calls history.back() instead.
         webView.allowsBackForwardNavigationGestures = false
         webView.isOpaque = false
         webView.backgroundColor = .black
@@ -93,6 +95,15 @@ private struct FriendsWebContainer: UIViewRepresentable {
         DispatchQueue.main.async {
             bridge.syncSafeAreaInsets()
         }
+
+        // Left-edge swipe → history.back() (replaces WKWebView's built-in gesture)
+        let edgePan = UIScreenEdgePanGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleBackEdgeSwipe(_:))
+        )
+        edgePan.edges = .left
+        webView.addGestureRecognizer(edgePan)
+
         return webView
     }
 
@@ -109,6 +120,11 @@ private struct FriendsWebContainer: UIViewRepresentable {
 
         init(bridge: FriendsWebBridge) {
             self.bridge = bridge
+        }
+
+        @objc func handleBackEdgeSwipe(_ recognizer: UIScreenEdgePanGestureRecognizer) {
+            guard recognizer.state == .recognized else { return }
+            bridge.webView?.evaluateJavaScript("history.back()", completionHandler: nil)
         }
 
         func userContentController(
